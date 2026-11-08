@@ -21,7 +21,7 @@
   No always-on wake word (iOS doesn't allow it for third-party apps).
 - **Actions:** `open_url` only (deep link back to the video/post/profile). No control of other apps.
 
-## Demo script (for 8:00 PM)
+## Demo script
 
 1. (30s) Problem: "I saw a great video about X last week… where was it?" Your phone has no memory.
 2. Start capture (red pill). Scroll X for ~45s, watch a YouTube video about AI agents for ~45s.
