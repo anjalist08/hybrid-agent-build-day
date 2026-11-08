@@ -63,7 +63,7 @@ function Index() {
             </div>
             <div className="flex-1 overflow-y-auto px-6 pt-5 pb-4">
               {chatOpen ? (
-                <ChatView chat={chat} />
+                <ChatView chat={chat} onBack={() => { setChatOpen(false); setStep("options"); }} />
               ) : (
                 <div key={step} className="animate-fade-up">
                   {step === "suggest" && <Suggest onNext={() => setStep("searching")} />}
@@ -148,6 +148,7 @@ function Suggest({ onNext }: { onNext: () => void }) {
 function Searching({ onNext }: { onNext: () => void }) {
   const [done, setDone] = useState(false);
   useEffect(() => { const t = setTimeout(() => setDone(true), 1600); return () => clearTimeout(t); }, []);
+  useEffect(() => { if (!done) return undefined; const t = setTimeout(onNext, 500); return () => clearTimeout(t); }, [done, onNext]);
   return (
     <>
       <Title h="Finding your tickets." sub="Searching live listings under $100." />
@@ -158,16 +159,6 @@ function Searching({ onNext }: { onNext: () => void }) {
         </div>
         <p className="font-semibold mt-5">{done ? "Found 3 options" : "Checking availability & total prices"}</p>
       </div>
-      {done && (
-        <div className="rounded-2xl border divide-y mb-4 animate-fade-up">
-          {OPTIONS.map((o) => (
-            <div key={o.price} className="p-3.5 flex justify-between items-center">
-              <div><p className="text-sm font-semibold">{o.label}</p><p className="text-xs text-muted-foreground">{o.sub}</p></div>
-              <p className="text-sm font-semibold">${o.price}</p>
-            </div>
-          ))}
-        </div>
-      )}
       <div className="rounded-2xl border p-4 text-xs mb-6">
         <p className="font-semibold flex items-center gap-1.5"><Check className="size-3.5" /> One-time search approved</p>
         <p className="text-muted-foreground mt-1">Only the event and your budget were shared.</p>
@@ -289,7 +280,7 @@ function Plan({ seat, onRestart }: { seat: number; onRestart: () => void }) {
   );
 }
 
-function ChatView({ chat }: { chat: ChatItem[] }) {
+function ChatView({ chat, onBack }: { chat: ChatItem[]; onBack: () => void }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: "smooth" });
@@ -306,6 +297,11 @@ function ChatView({ chat }: { chat: ChatItem[] }) {
           <div key={i} className="space-y-2 animate-fade-up">
             {m.hits && m.hits.length > 0 && <><p className="text-[11px] text-muted-foreground">Found {m.hits.length} messages</p><Hits hits={m.hits} /></>}
             <p className="text-sm" dangerouslySetInnerHTML={{ __html: m.text.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>") }} />
+            {i === chat.length - 1 && (
+              <button onClick={onBack} className="rounded-full border px-3 py-1.5 text-xs font-medium flex items-center gap-1.5">
+                <Ticket className="size-3.5" /> Back to ticket options
+              </button>
+            )}
           </div>
         ),
       )}
