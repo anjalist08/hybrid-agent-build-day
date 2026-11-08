@@ -79,36 +79,37 @@ def build_context(db: DB, question: str, now: float | None = None) -> dict:
     }
 
 
-def answer(db: DB, question: str) -> tuple[LensAnswer, dict]:
+def user_prompt(context: dict, question: str) -> str:
+    """The exact text that leaves the machine on a cloud call (also reused by the local LLM)."""
+    return f"<activity_log>\n{json.dumps(context, indent=1)}\n</activity_log>\n\nQuestion: {question}"
+
+
+def answer_cloud(db: DB, question: str) -> tuple[LensAnswer, dict]:
+    """Answer with Claude. Raises on any failure so the router can fall back to local.
+
+    Returns (answer, info) where info says how much text was sent. Logging is done by the router.
+    """
     context = build_context(db, question)
-    start = time.perf_counter()
-    try:
-        response = _claude().messages.parse(
-            model=settings.claude_model,
-            max_tokens=8000,
-            # Voice UX: keep latency down. Raise effort if answers look shallow.
-            output_config={"effort": "low"},
-            # Server-side fallback: if the model declines, the API reroutes by refusal category.
-            extra_headers={"anthropic-beta": "server-side-fallback-2026-07-01"},
-            extra_body={"fallbacks": "default"},
-            system=SYSTEM,
-            output_format=LensAnswer,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"<activity_log>\n{json.dumps(context, indent=1)}\n</activity_log>\n\nQuestion: {question}",
-                }
-            ],
-        )
-    except anthropic.APIError as e:
-        ms = int((time.perf_counter() - start) * 1000)
-        db.log_route("query", "cloud", settings.claude_model, ms, False, repr(e))
-        raise
-    ms = int((time.perf_counter() - start) * 1000)
+    prompt = user_prompt(context, question)
+    # Fail fast: if the network is down we'd rather answer locally than make the user wait.
+    client = _claude().with_options(timeout=settings.cloud_timeout_s, max_retries=0)
+    response = client.messages.parse(
+        model=settings.claude_model,
+        max_tokens=8000,
+        # Voice UX: keep latency down. Raise effort if answers look shallow.
+        output_config={"effort": "low"},
+        # Server-side fallback: if the model declines, the API reroutes by refusal category.
+        extra_headers={"anthropic-beta": "server-side-fallback-2026-07-01"},
+        extra_body={"fallbacks": "default"},
+        system=SYSTEM,
+        output_format=LensAnswer,
+        messages=[{"role": "user", "content": prompt}],
+    )
     if response.stop_reason == "refusal" or response.parsed_output is None:
-        db.log_route("query", "cloud", settings.claude_model, ms, False, f"stop_reason={response.stop_reason}")
         raise RuntimeError(f"no answer (stop_reason={response.stop_reason})")
-    sent = len(context["matching_impressions"])
-    db.log_route("query", "cloud", settings.claude_model, ms, True, f"{sent} impressions sent as text, 0 images")
-    route = {"location": "cloud", "model": settings.claude_model, "ms": ms, "impressions_sent": sent, "images_sent": 0}
-    return response.parsed_output, route
+    info = {
+        "impressions_sent": len(context["matching_impressions"]),
+        "images_sent": 0,
+        "chars_sent": len(SYSTEM) + len(prompt),
+    }
+    return response.parsed_output, info

@@ -19,8 +19,8 @@ from . import kb
 from .config import settings
 from .db import DB
 from .extract import dhash, extract, hamming
-from .query import answer
-from .schemas import QueryRequest, QueryResponse
+from . import router
+from .schemas import ModeRequest, QueryRequest, QueryResponse
 
 log = logging.getLogger("lens")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -117,7 +117,7 @@ def enqueue(jpeg: bytes, ts: float, device: str) -> str:
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "extractor": settings.extractor, "cloud_fallback": settings.cloud_fallback,
-            "queue": queue.qsize(), **stats}
+            "router": router.mode["router"], "offline": router.mode["offline"], "queue": queue.qsize(), **stats}
 
 
 @app.post("/ingest/frame", status_code=202)
@@ -159,13 +159,29 @@ async def ingest_video(
 def query(req: QueryRequest) -> QueryResponse:
     if not req.text.strip():
         raise HTTPException(400, "empty question")
+    # The router picks local or cloud per question and falls back to local if the cloud fails,
+    # so network problems never surface as errors here.
     try:
-        result, route = answer(db, req.text)
+        result, route = router.answer_question(db, req.text)
     except Exception as e:  # noqa: BLE001
         log.exception("query failed")
-        raise HTTPException(502, f"query failed: {e}") from e
+        raise HTTPException(500, f"query failed: {e}") from e
     route["transcript_source"] = req.source
     return QueryResponse(answer=result, route=route)
+
+
+@app.get("/mode")
+def get_mode() -> dict:
+    return dict(router.mode)
+
+
+@app.post("/mode")
+def post_mode(req: ModeRequest) -> dict:
+    """Switch routing at runtime, e.g. {"offline": true} to demo Lens with the network "unplugged"."""
+    try:
+        return router.set_mode(req.router, req.offline)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
 
 
 @app.get("/impressions")
