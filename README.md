@@ -66,7 +66,19 @@ curl -F video=@recording.mp4 -F every_s=3 http://localhost:8000/ingest/video
 curl -X POST localhost:8000/query -H 'content-type: application/json' -d '{"text":"what did I watch about AI?"}'
 ```
 
-### Generative UI
+### Figma concert-flow preview
+
+See [UI demo screenshots and walkthrough](docs/ui-demo.md).
+
+The app now opens to a sample personal-suggestions screen. Tap **Take a look**,
+then **Find tickets** to walk through disclosure, sample tickets, seated filtering,
+invitation/calendar drafts, and a final plan. This flow runs locally with fictional
+data; it does not search providers, purchase tickets, send messages, write calendar
+events, or persist memory preferences. The fixed lock-screen time/date are design
+fixtures. The waveform toolbar button opens the existing backend-connected voice
+and text assistant; routing and settings remain available in the toolbar.
+
+### Generative UI contract
 
 The cloud model answers with a screen built from a small component catalog
 (`header`, `text`, `card`, `list`, `timeline`, `person`, `chips`, `bar_chart`, `link_button`),

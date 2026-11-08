@@ -1,6 +1,59 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var concertPlan: ConcertDemoPlan?
+    @State private var showAssistant = false
+    @State private var showSettings = false
+    @State private var showRoutes = false
+    @State private var showTickets = false
+
+    var body: some View {
+        NavigationStack {
+            RecommendationHomeView(plan: concertPlan) {
+                showConcert = true
+            }
+            .navigationDestination(isPresented: $showConcert) {
+                ConcertDetailView { showTickets = true }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showRoutes = true } label: {
+                        Image(systemName: "point.3.connected.trianglepath.dotted")
+                    }
+                    .accessibilityLabel("Where it ran")
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { showAssistant = true } label: { Image(systemName: "waveform") }
+                        .accessibilityLabel("Ask Lens")
+                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
+                        .accessibilityLabel("Settings")
+                }
+            }
+            .sheet(isPresented: $showAssistant) { AssistantChatView() }
+            .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showRoutes) { RoutingView() }
+            .sheet(isPresented: $showTickets, onDismiss: {
+                if concertPlan != nil { showConcert = false }
+            }) {
+                TicketFlowView { concertPlan = $0 }
+            }
+        }
+        .tint(.primary)
+        .preferredColorScheme(.light)
+        #if DEBUG
+        .task {
+            // Deterministic entry points for simulator screenshots; no external actions.
+            let arguments = ProcessInfo.processInfo.arguments
+            showConcert = arguments.contains("--preview-concert")
+            showTickets = arguments.contains("--preview-tickets")
+        }
+        #endif
+    }
+
+    @State private var showConcert = false
+}
+
+struct AssistantChatView: View {
     @StateObject private var model = AppModel()
     @StateObject private var voice = VoiceController()
     @State private var typed = ""
