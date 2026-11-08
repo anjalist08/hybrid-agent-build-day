@@ -66,6 +66,21 @@ curl -F video=@recording.mp4 -F every_s=3 http://localhost:8000/ingest/video
 curl -X POST localhost:8000/query -H 'content-type: application/json' -d '{"text":"what did I watch about AI?"}'
 ```
 
+### Debugging the knowledge base
+
+With `LENS_DEBUG=true` (the default) every frame is written to `backend/data/debug/<date>/`:
+the screenshot, the extracted JSON, and a Markdown card. `index.md` shows them in order, including
+same-screen frames that only add dwell time, `queries.md` logs each question and what was sent to the cloud,
+and `backend/data/debug/knowledge.md` is a live snapshot of apps, topics, people and impressions.
+Open them in VS Code's Markdown preview (Cmd+Shift+V) to see the images inline.
+
+Compare models or prompt changes on the same real frames:
+
+```bash
+uv run python -m app.replay data/debug/2026-11-08 --model qwen2.5vl:3b
+uv run python -m app.replay data/debug/2026-11-08 --cloud     # CLAUDE_EXTRACT_MODEL
+```
+
 ### Generative UI
 
 The cloud model answers with a screen built from a small component catalog

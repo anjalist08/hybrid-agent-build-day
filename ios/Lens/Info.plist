@@ -29,6 +29,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Lens sends screenshots and questions to your own Lens server on this network.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Lens listens while you hold the mic button so you can ask about what you've seen.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

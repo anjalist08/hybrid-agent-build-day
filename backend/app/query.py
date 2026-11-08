@@ -11,6 +11,7 @@ from datetime import datetime
 import anthropic
 
 from .config import settings
+from . import debug
 from .db import DB, row_topics
 from .kb import app_stats, interests, link_for, search
 from .schemas import LensAnswer
@@ -30,6 +31,8 @@ Answer the user's question using ONLY that log. Return:
   Put the item's `link` in `url` so the user can tap through. Keep it to 2-5 components.
 - action: kind "open_url" only if the user explicitly asked to open/play/show a specific item; else "none".
 
+If `indexing_backlog.frames_pending` is above 0, the most recent screens are still being read:
+when the answer looks incomplete, say so naturally (e.g. "I'm still catching up on the last minute").
 If the log has nothing relevant, say so plainly in speech and show what they HAVE been looking at instead.
 Never invent items, handles, or links that are not in the log."""
 
@@ -54,11 +57,12 @@ def _ago(ts: float, now: float) -> str:
     return f"{int(d // 86400)}d ago"
 
 
-def build_context(db: DB, question: str, now: float | None = None) -> dict:
+def build_context(db: DB, question: str, now: float | None = None, backlog: dict | None = None) -> dict:
     now = now or time.time()
     hits = search(db, question)
     return {
         "now": datetime.fromtimestamp(now).strftime("%A %Y-%m-%d %H:%M"),
+        "indexing_backlog": backlog or {"frames_pending": 0, "behind_s": 0},
         "matching_impressions": [
             {
                 "app": r["app"],
@@ -79,8 +83,9 @@ def build_context(db: DB, question: str, now: float | None = None) -> dict:
     }
 
 
-def answer(db: DB, question: str) -> tuple[LensAnswer, dict]:
-    context = build_context(db, question)
+def answer(db: DB, question: str, backlog: dict | None = None) -> tuple[LensAnswer, dict]:
+    context = build_context(db, question, backlog=backlog)
+    asked_at = time.time()
     start = time.perf_counter()
     try:
         response = _claude().messages.parse(
@@ -103,12 +108,15 @@ def answer(db: DB, question: str) -> tuple[LensAnswer, dict]:
     except anthropic.APIError as e:
         ms = int((time.perf_counter() - start) * 1000)
         db.log_route("query", "cloud", settings.claude_model, ms, False, repr(e))
+        debug.query(asked_at, question, context, None, ms, repr(e))
         raise
     ms = int((time.perf_counter() - start) * 1000)
     if response.stop_reason == "refusal" or response.parsed_output is None:
         db.log_route("query", "cloud", settings.claude_model, ms, False, f"stop_reason={response.stop_reason}")
+        debug.query(asked_at, question, context, None, ms, f"stop_reason={response.stop_reason}")
         raise RuntimeError(f"no answer (stop_reason={response.stop_reason})")
     sent = len(context["matching_impressions"])
     db.log_route("query", "cloud", settings.claude_model, ms, True, f"{sent} impressions sent as text, 0 images")
+    debug.query(asked_at, question, context, response.parsed_output.speech, ms, None)
     route = {"location": "cloud", "model": settings.claude_model, "ms": ms, "impressions_sent": sent, "images_sent": 0}
     return response.parsed_output, route

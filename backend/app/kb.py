@@ -17,11 +17,13 @@ def _norm(s: str | None) -> str:
     return re.sub(r"\s+", " ", (s or "").strip().lower())
 
 
+_APP_ALIASES = {"twitter": "X", "x": "X", "x (twitter)": "X", "youtube": "YouTube", "medium": "Medium",
+                "safari": "Safari", "chrome": "Chrome", "google chrome": "Chrome", "google": "Google",
+                "instagram": "Instagram", "reddit": "Reddit", "linkedin": "LinkedIn", "tiktok": "TikTok"}
+
+
 def _norm_app(app: str) -> str:
-    a = _norm(app)
-    aliases = {"twitter": "X", "x": "X", "x (twitter)": "X", "youtube": "YouTube", "medium": "Medium",
-               "safari": "Safari", "chrome": "Chrome", "google chrome": "Chrome", "google": "Google"}
-    return aliases.get(a, app.strip() or "Unknown")
+    return _APP_ALIASES.get(_norm(app), app.strip() or "Unknown")
 
 
 def item_key(app: str, item: VisibleItem) -> str:
@@ -64,14 +66,27 @@ def _index_fts(db: DB, impression_id: int) -> None:
     )
 
 
+_JUNK_TITLE = re.compile(r"^[\d:.,\s]*[kmb]?\s*(views?|ago|watching|likes?)?\s*$", re.I)
+
+
+def is_ignored_app(app: str) -> bool:
+    return _norm(app) in settings.ignore_apps
+
+
+def is_junk_title(title: str) -> bool:
+    """Durations ("0:40"), counts ("1.2M views"), or near-empty strings aren't content."""
+    t = title.strip()
+    return len(t) < 4 or bool(_JUNK_TITLE.match(t))
+
+
 def record_observation(db: DB, obs: FrameObservation, ts: float) -> list[int]:
     """Merge one frame's items into impressions. Returns the impression ids touched."""
-    if obs.sensitive:
+    if obs.sensitive or is_ignored_app(obs.app):
         return []
     app = _norm_app(obs.app)
     touched: list[int] = []
-    for item in obs.items:
-        if not item.title.strip():
+    for item in obs.items[:8]:
+        if is_junk_title(item.title):
             continue
         key = item_key(app, item)
         topics = sorted({_norm(t) for t in item.topics if t.strip()})[:4]
@@ -165,6 +180,16 @@ def search(db: DB, text: str, limit: int = 40) -> list[dict]:
             "WHERE impressions_fts MATCH ? ORDER BY bm25(impressions_fts), i.dwell_s DESC LIMIT ?",
             (q, limit),
         )
+    # "my YouTube activity" -> make sure that app's recent items are in the context.
+    lowered = text.lower()
+    named_apps = {canon for alias, canon in _APP_ALIASES.items() if re.search(rf"\b{re.escape(alias)}\b", lowered)}
+    if named_apps:
+        seen = {r["id"] for r in rows}
+        marks = ",".join("?" * len(named_apps))
+        recent_app = db.query(f"SELECT * FROM impressions WHERE app IN ({marks}) ORDER BY ts_end DESC LIMIT ?",
+                              (*named_apps, limit))
+        rows = [r for r in recent_app if r["id"] not in seen] + rows
+        rows = rows[:limit]
     if len(rows) < 10:
         seen = {r["id"] for r in rows}
         recent = db.query("SELECT * FROM impressions ORDER BY ts_end DESC LIMIT ?", (limit,))
