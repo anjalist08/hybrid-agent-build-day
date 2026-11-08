@@ -2,6 +2,6 @@
 
 ## Decisions
 
-## Demo script (for 8:00 PM)
+## Demo script
 
 ## Open questions
