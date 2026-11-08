@@ -40,3 +40,7 @@ ios/Config/Local.xcconfig
 xcuserdata/
 DerivedData/
 *.xcresult
+
+# SwiftPM build output for the prompt generator
+tools/openui-prompt/.build/
+tools/openui-prompt/Package.resolved

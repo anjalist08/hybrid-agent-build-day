@@ -1,0 +1,137 @@
+[
+  {
+    "name": "get_event",
+    "description": "Details of one event: artist, venue, date, description and price tiers per seat category.",
+    "annotations": { "readOnlyHint": true },
+    "inputSchema": {
+      "type": "object",
+      "properties": { "event_id": { "type": "string" } },
+      "required": ["event_id"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "artist": { "type": "string" },
+        "venue": { "type": "string" },
+        "city": { "type": "string" },
+        "date": { "type": "string" },
+        "doors": { "type": "string" },
+        "description": { "type": "string" },
+        "seats_available": { "type": "number" },
+        "price_tiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "category": { "type": "string" },
+              "label": { "type": "string" },
+              "price": { "type": "number" },
+              "color": { "type": "string" },
+              "available": { "type": "number" }
+            },
+            "required": ["category", "label", "price", "color", "available"]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "get_seats",
+    "description": "Live seat map of an event: every seat with its position, section, row, status and price. Pass the whole result to SeatMap.",
+    "annotations": { "readOnlyHint": true },
+    "inputSchema": {
+      "type": "object",
+      "properties": { "event_id": { "type": "string" } },
+      "required": ["event_id"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "event_id": { "type": "string" },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "stage": { "type": "string" },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": { "type": "string" },
+              "label": { "type": "string" },
+              "color": { "type": "string" },
+              "price": { "type": "number" }
+            },
+            "required": ["key", "label", "color", "price"]
+          }
+        },
+        "seats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "section": { "type": "string" },
+              "row": { "type": "string" },
+              "seat": { "type": "string" },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "category": { "type": "string" },
+              "price": { "type": "number" },
+              "status": { "type": "string", "enum": ["free", "held", "booked"] }
+            },
+            "required": ["id", "section", "row", "seat", "x", "y", "category", "price", "status"]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "hold_seats",
+    "description": "Hold the selected seats for 10 minutes so nobody else can take them during checkout. Write operation — use with Mutation().",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "event_id": { "type": "string" },
+        "seats": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["event_id", "seats"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "hold_token": { "type": "string" },
+        "expires_at": { "type": "string" },
+        "seats": { "type": "array", "items": { "type": "string" } },
+        "subtotal": { "type": "number" },
+        "fees": { "type": "number" },
+        "total": { "type": "number" },
+        "message": { "type": "string" }
+      }
+    }
+  },
+  {
+    "name": "book_seats",
+    "description": "Pay for and book held seats (demo payment, no card is charged). Write operation — use with Mutation().",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "event_id": { "type": "string" },
+        "hold_token": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["event_id", "hold_token", "name", "email"]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "order_id": { "type": "string" },
+        "seats": { "type": "array", "items": { "type": "string" } },
+        "total": { "type": "number" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+]

@@ -5,6 +5,11 @@ options:
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
+packages:
+  # Native SwiftUI renderer for OpenUI Lang. Pinned: single-commit repo, no releases, no license file yet.
+  OpenUI:
+    url: https://github.com/martinmitrevski/OpenUI.git
+    revision: 5979833d5793aabd3df6466f1395125c62a4f87a
 configFiles:
   Debug: Config/Base.xcconfig
   Release: Config/Base.xcconfig
@@ -26,6 +31,7 @@ targets:
     sources: [Lens, Shared]
     dependencies:
       - target: LensBroadcast
+      - package: OpenUI
     info:
       path: Lens/Info.plist
       properties:

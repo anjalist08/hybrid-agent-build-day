@@ -1,0 +1,40 @@
+[
+  {
+    "id": "midnight-static-sf",
+    "name": "Midnight Static — The Neon Tide Tour",
+    "artist": "Midnight Static",
+    "venue": "The Fillmore",
+    "city": "San Francisco",
+    "date": "2026-12-12T20:00:00-08:00",
+    "doors": "7:00 PM",
+    "description": "Synth-rock four-piece on their first West Coast run, with support from Paper Lanterns.",
+    "aliases": ["midnight static", "neon tide", "fillmore", "midnight static fillmore"],
+    "seatsio_event_key": "",
+    "currency": "USD",
+    "fee_per_ticket": 8.5,
+    "categories": [
+      { "key": "floor", "label": "Floor", "price": 120, "color": "#FF5A5F" },
+      { "key": "lower", "label": "Lower Bowl", "price": 85, "color": "#3D5AF1" },
+      { "key": "balcony", "label": "Balcony", "price": 55, "color": "#22A699" }
+    ]
+  },
+  {
+    "id": "harbor-lights-oakland",
+    "name": "Harbor Lights Live",
+    "artist": "Harbor Lights",
+    "venue": "Fox Theater",
+    "city": "Oakland",
+    "date": "2026-12-19T19:30:00-08:00",
+    "doors": "6:30 PM",
+    "description": "Indie-folk duo playing their new record front to back, plus a stripped-back encore set.",
+    "aliases": ["harbor lights", "fox theater", "fox oakland"],
+    "seatsio_event_key": "",
+    "currency": "USD",
+    "fee_per_ticket": 7.0,
+    "categories": [
+      { "key": "floor", "label": "Orchestra", "price": 95, "color": "#FF5A5F" },
+      { "key": "lower", "label": "Loge", "price": 70, "color": "#3D5AF1" },
+      { "key": "balcony", "label": "Balcony", "price": 45, "color": "#22A699" }
+    ]
+  }
+]

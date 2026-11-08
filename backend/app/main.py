@@ -5,6 +5,7 @@ Run:  uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 import asyncio
 import collections
+import json
 import logging
 import shutil
 import subprocess
@@ -14,9 +15,11 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 
-from . import debug, kb
+from . import agent, debug, kb, ticketing
 from .config import settings
 from .db import DB
 from .extract import dhash, extract, hamming
@@ -216,3 +219,44 @@ def wipe() -> dict:
     db.wipe()
     devices.clear()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- OpenUI agent (tickets demo)
+
+
+class ChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    effort: str = "low"
+
+
+@app.post("/agent/chat")
+def agent_chat(req: ChatRequest) -> StreamingResponse:
+    """Streams an OpenUI Lang answer as Server-Sent Events (see app/agent.py for the event types)."""
+    msgs = [m.model_dump() for m in req.messages]
+
+    def sse():
+        for event in agent.stream(msgs, effort=req.effort):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(sse(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/tools/{name}")
+def call_tool(name: str, args: dict = Body(default_factory=dict)):
+    """Query()/Mutation() calls from the generated UI. Errors come back as 400 {error}."""
+    try:
+        return agent.run_ui_tool(name, args)
+    except ticketing.TicketingError as e:
+        log.info("tool %s failed: %s", name, e)
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.get("/events")
+def list_events() -> list[dict]:
+    return ticketing.find_events("")

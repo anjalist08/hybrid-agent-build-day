@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showRoutes = false
     @State private var showTickets = false
+    @State private var showAgent = false
 
     var body: some View {
         NavigationStack {
@@ -23,6 +24,8 @@ struct ContentView: View {
                     .accessibilityLabel("Where it ran")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { showAgent = true } label: { Image(systemName: "ticket") }
+                        .accessibilityLabel("Lens Agent: tickets from a friend's message")
                     Button { showAssistant = true } label: { Image(systemName: "waveform") }
                         .accessibilityLabel("Ask Lens")
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
@@ -30,6 +33,7 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showAssistant) { AssistantChatView() }
+            .fullScreenCover(isPresented: $showAgent) { AgentChatView() }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showRoutes) { RoutingView() }
             .sheet(isPresented: $showTickets, onDismiss: {
@@ -46,6 +50,7 @@ struct ContentView: View {
             let arguments = ProcessInfo.processInfo.arguments
             showConcert = arguments.contains("--preview-concert")
             showTickets = arguments.contains("--preview-tickets")
+            showAgent = arguments.contains("--preview-agent")
         }
         #endif
     }
