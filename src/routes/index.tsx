@@ -158,6 +158,16 @@ function Searching({ onNext }: { onNext: () => void }) {
         </div>
         <p className="font-semibold mt-5">{done ? "Found 3 options" : "Checking availability & total prices"}</p>
       </div>
+      {done && (
+        <div className="rounded-2xl border divide-y mb-4 animate-fade-up">
+          {OPTIONS.map((o) => (
+            <div key={o.price} className="p-3.5 flex justify-between items-center">
+              <div><p className="text-sm font-semibold">{o.label}</p><p className="text-xs text-muted-foreground">{o.sub}</p></div>
+              <p className="text-sm font-semibold">${o.price}</p>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="rounded-2xl border p-4 text-xs mb-6">
         <p className="font-semibold flex items-center gap-1.5"><Check className="size-3.5" /> One-time search approved</p>
         <p className="text-muted-foreground mt-1">Only the event and your budget were shared.</p>
