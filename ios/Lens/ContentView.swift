@@ -113,7 +113,7 @@ struct AssistantChatView: View {
                     if let err = model.uploadError {
                         Text("Upload error: \(err)").foregroundStyle(.red)
                     } else if let h = model.health {
-                        Text("\(model.framesSent) sent · \(h.processed) read · \(h.deduped) same-screen · \(h.queue) queued")
+                        Text("\(h.offline == true ? "Offline mode · " : "")\(model.framesSent) sent · \(h.processed) read · \(h.deduped) same-screen · \(h.queue) queued")
                     } else {
                         Text("Backend unreachable: \(SharedConfig.backendURL.absoluteString)").foregroundStyle(.orange)
                     }
@@ -145,7 +145,9 @@ struct AssistantChatView: View {
         }
         if let answer = model.answer, !model.isThinking {
             Text(answer.speech).font(.body)
-            if let route = model.route { RouteBadges(route: route, sttOnDevice: voice.onDevice) }
+            if let route = model.route {
+                RouteBadges(route: route, sttOnDevice: voice.onDevice, extractor: model.health?.extractor)
+            }
         }
     }
 
@@ -155,7 +157,8 @@ struct AssistantChatView: View {
             ForEach(["What have I been watching about AI agents?",
                      "Who do I read the most on X?",
                      "How much time did I spend on YouTube today?",
-                     "Open the last video I watched"], id: \.self) { s in
+                     "Open the last video I watched",
+                     "Summarize what I've learned about AI agents"], id: \.self) { s in
                 Button(s) { Task { await model.ask(s, source: "typed", voice: voice) } }
                     .font(.subheadline)
             }
@@ -201,20 +204,38 @@ struct AssistantChatView: View {
     }
 }
 
-/// Where each step of the last answer ran: the "hybrid" story in one row.
+/// Where each step of the last answer ran, and why: the "hybrid" story in one row.
 struct RouteBadges: View {
     let route: RouteInfo
     let sttOnDevice: Bool
+    /// The backend's screenshot extractor ("ollama" = local, "claude" = cloud), from /health.
+    let extractor: String?
+
+    private var screensLocal: Bool { extractor != "claude" }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                badge("Speech", sttOnDevice ? "on-device" : "Apple", .green)
-                badge("Screens", "local model", .green)
-                badge("Answer", "\(route.model) · \(String(format: "%.1fs", Double(route.ms) / 1000))", .blue)
-                badge("Sent to cloud", "\(route.impressionsSent ?? 0) text rows, \(route.imagesSent ?? 0) images", .orange)
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    badge("Speech", sttOnDevice ? "on-device" : "Apple", .green)
+                    badge("Screens", screensLocal ? "local model" : "cloud model", screensLocal ? .green : .blue)
+                    badge("Answer", "\(route.isLocal ? "local" : "cloud") · \(route.model) · \(String(format: "%.1fs", Double(route.ms) / 1000))",
+                          route.isLocal ? .green : .blue)
+                    badge("Sent to cloud", sentToCloud, route.isLocal ? .green : .orange)
+                    if route.offline == true { badge("Mode", "offline", .orange) }
+                }
+            }
+            if let reason = route.reason {
+                Label(reason, systemImage: route.fallbackFrom == nil ? "arrow.triangle.branch" : "wifi.slash")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var sentToCloud: String {
+        if route.isLocal { return "nothing" }
+        return "\(route.charsSent ?? 0) chars · \(route.impressionsSent ?? 0) rows · \(route.imagesSent ?? 0) images"
     }
 
     private func badge(_ label: String, _ value: String, _ color: Color) -> some View {
@@ -270,6 +291,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var url = SharedConfig.backendURL.absoluteString
     @State private var interval = SharedConfig.captureInterval
+    @State private var offline = false
+    @State private var modeError: String?
 
     var body: some View {
         NavigationStack {
@@ -287,6 +310,22 @@ struct SettingsView: View {
                 } footer: {
                     Text("Takes effect the next time you start screen capture.")
                 }
+                Section {
+                    Toggle("Offline mode", isOn: $offline)
+                        .onChange(of: offline) { _, newValue in
+                            Task {
+                                do { _ = try await LensAPI.setOffline(newValue); modeError = nil }
+                                catch { modeError = error.localizedDescription }
+                            }
+                        }
+                } header: {
+                    Text("Demo")
+                } footer: {
+                    Text(modeError ?? "Simulates unplugging the network: nothing is sent to the cloud, and Lens answers from this laptop only.")
+                }
+            }
+            .task {
+                if let mode = try? await LensAPI.mode() { offline = mode.offline }
             }
             .navigationTitle("Settings")
             .toolbar {

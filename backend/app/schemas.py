@@ -90,3 +90,10 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: LensAnswer
     route: dict
+
+
+class ModeRequest(BaseModel):
+    # "auto" | "cloud" | "local"; omit to leave unchanged.
+    router: str | None = None
+    # True simulates the network being unplugged: nothing is sent to the cloud.
+    offline: bool | None = None

@@ -30,6 +30,19 @@ class Settings:
     # Half-life for interest decay, in hours.
     interest_half_life_h: float = float(os.environ.get("LENS_INTEREST_HALF_LIFE_H", "72"))
 
+    # ---- Answer routing (see app/router.py) ----
+    # "auto": simple lookups stay local, open-ended questions go to the cloud.
+    # "cloud": always try the cloud first.  "local": never call the cloud.
+    router_mode: str = os.environ.get("LENS_ROUTER", "auto")
+    # Start in offline mode (as if the network were unplugged). Can be flipped at runtime via POST /mode.
+    offline: bool = _bool("LENS_OFFLINE", False)
+    # Local LLM used to answer open-ended questions when the cloud is unavailable.
+    # Defaults to the vision model so no extra download is needed.
+    ollama_text_model: str = os.environ.get("OLLAMA_TEXT_MODEL", os.environ.get("OLLAMA_VISION_MODEL", "qwen2.5vl:7b"))
+    # Give up on the cloud after this many seconds and answer locally instead.
+    cloud_timeout_s: float = float(os.environ.get("LENS_CLOUD_TIMEOUT", "25"))
+    local_llm_timeout_s: float = float(os.environ.get("LENS_LOCAL_LLM_TIMEOUT", "90"))
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "lens.db"

@@ -8,12 +8,25 @@ struct QueryResponse: Decodable {
 }
 
 struct RouteInfo: Decodable {
-    let location: String
+    let location: String          // "local" or "cloud"
     let model: String
     let ms: Int
     let impressionsSent: Int?
     let imagesSent: Int?
     let transcriptSource: String?
+    // Hybrid routing (backend/app/router.py)
+    let engine: String?           // "rules" (knowledge base), "ollama" (local model) or "claude"
+    let reason: String?           // why it ran where it did
+    let offline: Bool?
+    let fallbackFrom: String?     // "cloud" when the cloud failed and Lens answered locally
+    let charsSent: Int?
+
+    var isLocal: Bool { location != "cloud" }
+}
+
+struct ModeInfo: Codable {
+    var router: String
+    var offline: Bool
 }
 
 struct LensAnswer: Decodable {
@@ -73,6 +86,8 @@ struct RouteLogEntry: Decodable, Identifiable {
 struct Health: Decodable {
     let ok: Bool
     let extractor: String
+    let router: String?
+    let offline: Bool?
     let queue: Int
     let received: Int
     let deduped: Int
@@ -124,5 +139,15 @@ enum LensAPI {
 
     static func health() async throws -> Health {
         try await send("health", timeout: 5)
+    }
+
+    static func mode() async throws -> ModeInfo {
+        try await send("mode", timeout: 5)
+    }
+
+    /// Turn offline mode on or off on the backend (simulates unplugging the network for the demo).
+    static func setOffline(_ offline: Bool) async throws -> ModeInfo {
+        let body = try JSONSerialization.data(withJSONObject: ["offline": offline])
+        return try await send("mode", method: "POST", body: body, timeout: 5)
     }
 }

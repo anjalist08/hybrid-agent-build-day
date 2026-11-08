@@ -78,6 +78,19 @@ events, or persist memory preferences. The fixed lock-screen time/date are desig
 fixtures. The waveform toolbar button opens the existing backend-connected voice
 and text assistant; routing and settings remain available in the toolbar.
 
+### Smart routing and offline mode
+
+Each question goes to the cheapest place that can answer it ([backend/app/router.py](backend/app/router.py)):
+
+| Question | Answered by | Sent to cloud |
+|---|---|---|
+| Simple lookups: time per app, who you read most, top topics, the last item, "what did I watch about X" | Knowledge base on the laptop (instant) | Nothing |
+| Open-ended: summarize, recommend, explain | Claude | Extracted text only, never screenshots |
+| Open-ended while offline or when the cloud fails | Local model (Ollama), then the knowledge base | Nothing |
+
+Every answer reports where it ran, why, and how many characters went to the cloud; the app shows this under each answer.
+To demo the fallback, turn on **Settings → Offline mode** in the app (or `POST /mode {"offline": true}`), or actually unplug the network.
+
 ### Generative UI contract
 
 The cloud model answers with a screen built from a small component catalog
@@ -92,6 +105,7 @@ defined in [backend/app/schemas.py](backend/app/schemas.py) and rendered nativel
 | `POST /ingest/frame` | multipart `frame` (JPEG), `ts`, `device` |
 | `POST /ingest/video` | multipart `video`, `every_s`: demo fallback |
 | `POST /query` | `{"text": "...", "source": "device-stt"}` → `{answer: {speech, ui, action}, route}` |
+| `GET /mode`, `POST /mode` | `{"router": "auto"|"cloud"|"local", "offline": true|false}`: routing and offline switch |
 | `GET /impressions`, `/interests?type=topic`, `/routes`, `/health` | inspection |
 | `DELETE /data` | wipe the knowledge base |
 
