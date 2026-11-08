@@ -20,6 +20,9 @@ targets:
   Lens:
     type: application
     platform: iOS
+    # Single shared scheme that runs the app (and builds the extension with it), so Xcode
+    # never offers the extension scheme with its "Choose an app to run" prompt.
+    scheme: {}
     sources: [Lens, Shared]
     dependencies:
       - target: LensBroadcast
