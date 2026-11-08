@@ -25,9 +25,9 @@ type Step = "lock" | "suggest" | "searching" | "options" | "mia" | "invite" | "r
 type ChatItem = { role: "user" | "assistant"; text: string; hits?: Message[]; searching?: boolean };
 
 const OPTIONS = [
-  { price: 65, label: "Standing", sub: "General admission · Floor" },
-  { price: 85, label: "Seated", sub: "Reserved balcony · Row J" },
-  { price: 95, label: "Seated, Better View", sub: "Reserved loge · Row C · Center" },
+  { price: 65, label: "Standing", sub: "General admission · Floor", tag: "Mia prefers seats" },
+  { price: 85, label: "Seated", sub: "Reserved balcony · Row J", tag: "Mia likes this too", good: true },
+  { price: 95, label: "Seated, Better View", sub: "Reserved loge · Row C · Center", tag: "Mia likes this too", good: true },
 ];
 
 function Index() {
@@ -37,6 +37,7 @@ function Index() {
   const [chatOpen, setChatOpen] = useState(false);
 
   const ask = (q: string) => {
+    if (/work(s)? for mia/i.test(q)) { setChatOpen(false); setStep("mia"); return; }
     setChatOpen(true);
     setChat((c) => [...c, { role: "user", text: q }, { role: "assistant", text: "", searching: true }]);
     setTimeout(() => {
@@ -176,7 +177,8 @@ function Options({ seat, setSeat, onNext }: { seat: number; setSeat: (n: number)
       <div className="rounded-2xl border divide-y mb-6">
         {OPTIONS.map((o, i) => (
           <button key={o.price} onClick={() => setSeat(i)} className="w-full text-left p-4 flex justify-between items-start">
-            <div><p className="text-sm font-semibold">${o.price} — {o.label}</p><p className="text-xs text-muted-foreground">{o.sub}</p></div>
+            <div><p className="text-sm font-semibold">${o.price} — {o.label}</p><p className="text-xs text-muted-foreground">{o.sub}</p>
+              <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${o.good ? "bg-success/10 text-success" : "bg-secondary text-muted-foreground"}`}>{o.good ? "♥ " : ""}{o.tag}</span></div>
             <span className={`size-4 rounded-full border ${seat === i ? "border-[5px] border-primary" : ""}`} />
           </button>
         ))}
@@ -310,7 +312,7 @@ function ChatView({ chat, onBack }: { chat: ChatItem[]; onBack: () => void }) {
   );
 }
 
-const SUGGESTED = ["When is Mia free this week?", "Does Mia like seats or standing?", "Dinner before or after?"];
+const SUGGESTED = ["Does it work for Mia?", "When is Mia free this week?", "Does Mia like seats or standing?", "Dinner before or after?"];
 
 function Composer({ onSend }: { onSend: (q: string) => void }) {
   const [v, setV] = useState("");
