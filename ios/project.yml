@@ -1,0 +1,70 @@
+# Generate the Xcode project with:  cd ios && xcodegen
+# Per-developer values (team, bundle prefix, backend URL) live in Config/Local.xcconfig.
+name: Lens
+options:
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+
+targets:
+  Lens:
+    type: application
+    platform: iOS
+    sources: [Lens, Shared]
+    dependencies:
+      - target: LensBroadcast
+    info:
+      path: Lens/Info.plist
+      properties:
+        CFBundleDisplayName: Lens
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSMicrophoneUsageDescription: Lens listens while you hold the mic button so you can ask about what you've seen.
+        NSSpeechRecognitionUsageDescription: Lens turns your question into text on this device.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true # backend runs on a laptop over plain http during the demo
+        LensAppGroup: group.$(BUNDLE_PREFIX).lens
+        LensBackendURL: $(LENS_BACKEND_URL)
+    entitlements:
+      path: Lens/Lens.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(BUNDLE_PREFIX).lens]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_PREFIX).lens
+
+  LensBroadcast:
+    type: app-extension
+    platform: iOS
+    sources: [LensBroadcast, Shared]
+    dependencies:
+      - sdk: ReplayKit.framework
+    info:
+      path: LensBroadcast/Info.plist
+      properties:
+        CFBundleDisplayName: Lens Capture
+        LensAppGroup: group.$(BUNDLE_PREFIX).lens
+        LensBackendURL: $(LENS_BACKEND_URL)
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+    entitlements:
+      path: LensBroadcast/LensBroadcast.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(BUNDLE_PREFIX).lens]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_PREFIX).lens.broadcast

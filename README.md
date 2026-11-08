@@ -3,7 +3,85 @@
 Project for **Hybrid AI in Action: From Personal Agents to Real-World Deployment Build Day**
 (Lenovo × AGI House, Sunday Nov 8, 2026).
 
-> **Project idea:** _TBD — fill in once the team picks one._
+> **Project: Lens** — a personal memory agent for your iPhone. It watches what you read and
+> watch (X, YouTube, Medium, browsers) through screen capture, builds a private knowledge base
+> of topics, people, and time spent, and answers spoken questions with a voice reply plus a
+> natively rendered, model-generated UI. Screenshots are read by a **local** vision model;
+> only extracted text ever reaches the **cloud** model.
+
+## Lens: how it works
+
+```
+iPhone
+ ├─ Broadcast Upload Extension (ReplayKit) ── JPEG every 5s ──────────────┐
+ └─ Lens app (SwiftUI)                                                    │
+     ├─ Hold-to-talk → on-device speech-to-text → POST /query ─────┐      │
+     ├─ "Hey Siri, ask Lens" (App Intent, works over any app) ─────┤      │
+     └─ speaks answer + renders generated UI  ◄────────────────────┤      │
+                                                                   ▼      ▼
+Laptop / desk box: FastAPI  (backend/)
+ ├─ /ingest/frame → same-screen dedup (perceptual hash) → queue
+ │     → LOCAL vision model (Ollama qwen2.5vl) → {app, items[title, author, topics]}
+ │     → impressions with dwell time → entities (topics, people, apps) → interest scores
+ ├─ /query → full-text retrieval + interests → CLOUD Claude (text only)
+ │     → {speech, ui (component catalog), action}
+ └─ /routes → log of where every step ran (local vs cloud, model, latency)
+```
+
+| Step | Runs where | Why |
+|---|---|---|
+| Speech-to-text, text-to-speech | iPhone | Instant and private |
+| Screenshot understanding | Local vision model on the laptop | Raw pixels never leave hardware you own |
+| Knowledge base | SQLite on the laptop | Your history stays on your machine |
+| Answering + UI generation | Claude (cloud) | Needs strong reasoning; receives only titles, handles, topics, and dwell time |
+
+### Run it
+
+**Backend** (needs [uv](https://docs.astral.sh/uv/) and [Ollama](https://ollama.com)):
+
+```bash
+ollama pull qwen2.5vl:7b
+cd backend
+cp .env.example .env        # set ANTHROPIC_API_KEY
+./run.sh                    # http://0.0.0.0:8000
+uv run pytest -q            # offline tests
+```
+
+**iOS app** (needs Xcode 16 with the iOS platform installed, a paid Apple developer account, and a real iPhone; ReplayKit broadcast doesn't run in the Simulator):
+
+```bash
+brew install xcodegen
+cd ios
+cp Config/Local.xcconfig.example Config/Local.xcconfig   # team ID, bundle prefix, backend URL
+xcodegen && open Lens.xcodeproj
+```
+
+Run the `Lens` scheme on the phone. Tap the red ● at the top, choose **Lens Capture**, then go use X or YouTube.
+The phone and laptop must be able to reach each other: same Wi-Fi, or [Tailscale](https://tailscale.com) if the venue network blocks it.
+
+**Demo fallback (no phone needed):** record your screen with the built-in iOS Screen Recording, AirDrop it to the laptop, and:
+
+```bash
+curl -F video=@recording.mp4 -F every_s=3 http://localhost:8000/ingest/video
+curl -X POST localhost:8000/query -H 'content-type: application/json' -d '{"text":"what did I watch about AI?"}'
+```
+
+### Generative UI
+
+The cloud model answers with a screen built from a small component catalog
+(`header`, `text`, `card`, `list`, `timeline`, `person`, `chips`, `bar_chart`, `link_button`),
+defined in [backend/app/schemas.py](backend/app/schemas.py) and rendered natively by
+[ios/Lens/GenUI.swift](ios/Lens/GenUI.swift). Structured outputs guarantee the JSON matches.
+
+### API
+
+| Endpoint | What |
+|---|---|
+| `POST /ingest/frame` | multipart `frame` (JPEG), `ts`, `device` |
+| `POST /ingest/video` | multipart `video`, `every_s`: demo fallback |
+| `POST /query` | `{"text": "...", "source": "device-stt"}` → `{answer: {speech, ui, action}, route}` |
+| `GET /impressions`, `/interests?type=topic`, `/routes`, `/health` | inspection |
+| `DELETE /data` | wipe the knowledge base |
 
 ## The problem space
 
@@ -48,5 +126,7 @@ OpenJarvis, Hermes Agent, any cloud model API.
 ## Repo layout
 
 ```
+backend/   FastAPI service: ingest, local vision extraction, knowledge base, Claude queries
+ios/       XcodeGen spec, SwiftUI app (Lens/), ReplayKit extension (LensBroadcast/), Shared/
 docs/      notes, demo script, architecture sketches
 ```

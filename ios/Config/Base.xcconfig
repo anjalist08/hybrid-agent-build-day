@@ -1,0 +1,7 @@
+// Defaults. Override in Config/Local.xcconfig (gitignored); see Local.xcconfig.example.
+BUNDLE_PREFIX = com.example
+DEVELOPMENT_TEAM =
+// "$()" stops xcconfig from treating "//" as a comment.
+LENS_BACKEND_URL = http:/$()/192.168.1.10:8000
+
+#include? "Local.xcconfig"
