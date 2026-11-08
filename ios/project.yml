@@ -20,6 +20,9 @@ targets:
   Lens:
     type: application
     platform: iOS
+    # Single shared scheme that runs the app (and builds the extension with it), so Xcode
+    # never offers the extension scheme with its "Choose an app to run" prompt.
+    scheme: {}
     sources: [Lens, Shared]
     dependencies:
       - target: LensBroadcast
@@ -31,6 +34,7 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSMicrophoneUsageDescription: Lens listens while you hold the mic button so you can ask about what you've seen.
         NSSpeechRecognitionUsageDescription: Lens turns your question into text on this device.
+        NSLocalNetworkUsageDescription: Lens sends screenshots and questions to your own Lens server on this network.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true # backend runs on a laptop over plain http during the demo
         LensAppGroup: group.$(BUNDLE_PREFIX).lens

@@ -14,8 +14,13 @@ enum SharedConfig {
         if let s = defaults.string(forKey: Keys.backendURL), let url = URL(string: s), url.scheme != nil {
             return url
         }
+        #if targetEnvironment(simulator)
+        // The Simulator shares the Mac's network, so the backend is just localhost.
+        return URL(string: "http://localhost:8000")!
+        #else
         let fallback = Bundle.main.object(forInfoDictionaryKey: "LensBackendURL") as? String ?? "http://localhost:8000"
         return URL(string: fallback) ?? URL(string: "http://localhost:8000")!
+        #endif
     }
 
     static func setBackendURL(_ value: String) {

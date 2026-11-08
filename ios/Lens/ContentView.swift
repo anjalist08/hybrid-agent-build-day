@@ -107,7 +107,7 @@ struct AssistantChatView: View {
                 .frame(width: 36, height: 36)
                 .background(Color.red.opacity(model.broadcasting ? 0.2 : 0.08), in: Circle())
             VStack(alignment: .leading, spacing: 1) {
-                Text(model.broadcasting ? "Capturing screen" : "Tap ● to start screen capture")
+                Text(captureTitle)
                     .font(.subheadline.weight(.semibold))
                 Group {
                     if let err = model.uploadError {
@@ -126,6 +126,14 @@ struct AssistantChatView: View {
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(.bar)
+    }
+
+    private var captureTitle: String {
+        #if targetEnvironment(simulator)
+        return "Screen capture needs a real iPhone (use /ingest/video)"
+        #else
+        return model.broadcasting ? "Capturing screen" : "Tap ● to start screen capture"
+        #endif
     }
 
     @ViewBuilder

@@ -4,6 +4,7 @@ Run:  uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
 
 import asyncio
+import collections
 import logging
 import shutil
 import subprocess
@@ -15,7 +16,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
-from . import kb
+from . import debug, kb
 from .config import settings
 from .db import DB
 from .extract import dhash, extract, hamming
@@ -44,26 +45,48 @@ class Job:
 
 devices: dict[str, DeviceState] = {}
 queue: asyncio.Queue[Job] = asyncio.Queue(maxsize=200)
-stats = {"received": 0, "deduped": 0, "processed": 0, "failed": 0, "dropped": 0}
+# Capture timestamps of frames waiting for extraction, oldest first (for lag reporting).
+pending: collections.deque[float] = collections.deque()
+stats = {"received": 0, "deduped": 0, "processed": 0, "failed": 0, "dropped": 0, "ignored": 0}
 
 
-def process(job: Job) -> None:
+def backlog() -> dict:
+    """How far indexing is behind the phone. Shared with /health and the query context."""
+    now = time.time()
+    return {"frames_pending": len(pending), "behind_s": round(now - pending[0], 1) if pending else 0.0}
+
+
+def process(job: Job) -> bool:
+    """Returns False if extraction failed."""
     state = devices.setdefault(job.device, DeviceState())
     if job.jpeg is None:
         kb.extend_dwell(db, state.last_touched, job.ts)
-        return
-    obs, extractor = extract(db, job.jpeg)
-    db.execute(
-        "INSERT INTO frames(ts, device, dhash, app, screen_kind, sensitive, extractor, observation) VALUES (?,?,?,?,?,?,?,?)",
-        (job.ts, job.device, job.hash, obs.app, obs.screen_kind, int(obs.sensitive), extractor,
-         None if obs.sensitive else obs.model_dump_json()),
-    )
-    touched = kb.record_observation(db, obs, job.ts)
+        debug.duplicate(job.ts, state.last_touched)
+        return True
+
+    behind_s = time.time() - job.ts
+    result = extract(db, job.jpeg, behind_s=behind_s)
+    obs = result.obs
+    touched: list[int] = []
+    ignored_reason = None
+    if obs is not None:
+        db.execute(
+            "INSERT INTO frames(ts, device, dhash, app, screen_kind, sensitive, extractor, observation) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (job.ts, job.device, job.hash, obs.app, obs.screen_kind, int(obs.sensitive), result.label,
+             None if obs.sensitive else obs.model_dump_json()),
+        )
+        if kb.is_ignored_app(obs.app):
+            ignored_reason = f"app '{obs.app}' is in LENS_IGNORE_APPS"
+            stats["ignored"] += 1
+        touched = kb.record_observation(db, obs, job.ts)
+    # Dwell from following duplicate frames goes to what this frame showed (nothing, if it failed).
     state.last_touched = touched
-    if settings.save_frames and not obs.sensitive:
-        settings.frames_dir.mkdir(parents=True, exist_ok=True)
-        (settings.frames_dir / f"{job.device}-{job.ts:.0f}.jpg").write_bytes(job.jpeg)
-    log.info("frame %s %s -> %s items (%s)", job.device, obs.app, len(obs.items), extractor)
+    debug.frame(db, ts=job.ts, device=job.device, jpeg=job.jpeg, result=result, touched=touched,
+                ignored_reason=ignored_reason, behind_s=behind_s)
+    log.info("frame %s %s -> %s items, %d indexed (%s, %dms, %.0fs behind)", job.device,
+             obs.app if obs else "FAILED", len(obs.items) if obs else 0, len(touched), result.label, result.ms, behind_s)
+    return obs is not None
 
 
 async def worker() -> None:
@@ -72,21 +95,24 @@ async def worker() -> None:
     while True:
         job = await queue.get()
         try:
-            await asyncio.to_thread(process, job)
+            ok = await asyncio.to_thread(process, job)
             if job.jpeg is not None:
-                stats["processed"] += 1
+                stats["processed" if ok else "failed"] += 1
         except Exception:  # noqa: BLE001
             stats["failed"] += 1
             log.exception("frame processing failed")
         finally:
+            if job.jpeg is not None and pending:
+                pending.popleft()
             queue.task_done()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     task = asyncio.create_task(worker())
-    log.info("Lens backend up. extractor=%s cloud_fallback=%s db=%s", settings.extractor, settings.cloud_fallback,
-             settings.db_path)
+    log.info("Lens backend up. extractor=%s cloud_fallback=%s cloud_burst_lag=%ss debug=%s db=%s",
+             settings.extractor, settings.cloud_fallback, settings.cloud_burst_lag_s,
+             settings.debug_dir if settings.debug_dump else "off", settings.db_path)
     yield
     task.cancel()
 
@@ -105,6 +131,8 @@ def enqueue(jpeg: bytes, ts: float, device: str) -> str:
         # Duplicates skip the vision call but still go through the queue, so dwell is
         # credited after the original frame has been extracted.
         queue.put_nowait(Job(None if duplicate else jpeg, ts, device, h))
+        if not duplicate:
+            pending.append(ts)
     except asyncio.QueueFull:
         stats["dropped"] += 1
         return "dropped"
@@ -117,7 +145,7 @@ def enqueue(jpeg: bytes, ts: float, device: str) -> str:
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "extractor": settings.extractor, "cloud_fallback": settings.cloud_fallback,
-            "queue": queue.qsize(), **stats}
+            "queue": queue.qsize(), **backlog(), **stats}
 
 
 @app.post("/ingest/frame", status_code=202)
@@ -160,7 +188,7 @@ def query(req: QueryRequest) -> QueryResponse:
     if not req.text.strip():
         raise HTTPException(400, "empty question")
     try:
-        result, route = answer(db, req.text)
+        result, route = answer(db, req.text, backlog())
     except Exception as e:  # noqa: BLE001
         log.exception("query failed")
         raise HTTPException(502, f"query failed: {e}") from e

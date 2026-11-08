@@ -69,3 +69,21 @@ def test_dhash_detects_same_vs_different_screens():
     a, b = _jpeg("aaaa"), _jpeg("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     assert hamming(dhash(a), dhash(a)) == 0
     assert hamming(dhash(a), dhash(b)) > 5
+
+
+def test_own_app_and_junk_titles_are_not_indexed():
+    db = DB(":memory:")
+    assert kb.record_observation(db, _obs(app="Lens", title="Where is my Tesla"), 1000.0) == []
+    assert kb.record_observation(db, _obs(app="YouTube", title="0:40"), 1000.0) == []
+    assert kb.record_observation(db, _obs(app="YouTube", title="1.2M views"), 1000.0) == []
+    assert len(kb.record_observation(db, _obs(app="YouTube", title="2026 Midterms, explained."), 1000.0)) == 1
+
+
+def test_question_naming_an_app_retrieves_that_apps_items():
+    db = DB(":memory:")
+    kb.record_observation(db, _obs(app="youtube", title="Ramayana: Jai Jai Ram", author="T-Series",
+                                   topics=("music",)), 1000.0)
+    for i in range(30):
+        kb.record_observation(db, _obs(app="X", title=f"activity post number {i}", author=f"@u{i}"), 2000.0 + i)
+    hits = kb.search(db, "Ok tell me about my YouTube activity")
+    assert any(h["app"] == "YouTube" for h in hits)
