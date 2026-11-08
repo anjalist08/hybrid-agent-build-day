@@ -1,7 +1,6 @@
 # Lens: Project Plan
 
 Lenovo × AGI House **Hybrid AI Build Day**, Sunday Nov 8, 2026.
-Deadlines: **save the project draft by 7:00 PM** (finalists are picked from it), **demo at 8:00 PM**.
 
 The working code lives on the [`lens-mvp`](https://github.com/anjalist08/hybrid-agent-build-day/tree/lens-mvp) branch (built by Riaz).
 This plan describes what we're building, what's done, what's left, and which tool does what.
@@ -34,7 +33,7 @@ shows, live, where every step ran.
 4. Hears a short spoken answer and sees a screen built for that answer.
 5. Says or taps **"open it"** and the video, post or profile opens.
 
-### What the judges see (8:00 PM demo, ~3 minutes)
+### What the judges see (~3 minute demo)
 1. **The problem (30s):** "I saw a great video about AI agents last week. Where was it?" Your phone has no memory.
 2. **Capture:** start the red pill, scroll X and watch a YouTube video about AI agents.
 3. **Where it ran:** open the routing panel. Every screenshot was read by the **local** model, and duplicate screens were skipped.
@@ -136,7 +135,7 @@ iPhone                                              Laptop (or desk-side box)
 - [x] Demo fallback: upload a screen recording
 - [x] Offline backend tests (6 passing)
 
-### Must do before the 7:00 PM draft
+### Must do
 | # | Task | Why | Issue |
 |---|---|---|---|
 | 1 | Open a pull request for `lens-mvp` and review it | Get the MVP onto `main` | — |
@@ -176,7 +175,7 @@ These issues can be closed with a short comment pointing here.
 
 ---
 
-## 6. Out of scope for today
+## 6. Out of scope
 - Android
 - Controlling other apps (Lens only opens links)
 - An always-on wake word (iOS doesn't allow it for third-party apps)
