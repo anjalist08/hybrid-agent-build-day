@@ -14,8 +14,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
-from . import kb
+from . import kb, cuj
 from .config import settings
 from .db import DB
 from .extract import dhash, extract, hamming
@@ -60,7 +61,7 @@ def process(job: Job) -> None:
     )
     touched = kb.record_observation(db, obs, job.ts)
     state.last_touched = touched
-    if settings.save_frames and not obs.sensitive:
+    if settings.save_frames and not settings.fake_mode and not obs.sensitive:
         settings.frames_dir.mkdir(parents=True, exist_ok=True)
         (settings.frames_dir / f"{job.device}-{job.ts:.0f}.jpg").write_bytes(job.jpeg)
     log.info("frame %s %s -> %s items (%s)", job.device, obs.app, len(obs.items), extractor)
@@ -84,8 +85,14 @@ async def worker() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if settings.fake_mode:
+        from .demo import seed_demo
+
+        seed_demo(db)
     task = asyncio.create_task(worker())
-    log.info("Lens backend up. extractor=%s cloud_fallback=%s db=%s", settings.extractor, settings.cloud_fallback,
+    log.info("Lens backend up. extractor=%s cloud_fallback=%s db=%s",
+             "fake-demo" if settings.fake_mode else settings.extractor,
+             False if settings.fake_mode else settings.cloud_fallback,
              settings.db_path)
     yield
     task.cancel()
@@ -114,9 +121,32 @@ def enqueue(jpeg: bytes, ts: float, device: str) -> str:
     return "queued"
 
 
+@app.get("/demo", include_in_schema=False)
+def demo_page() -> FileResponse:
+    if not settings.fake_mode:
+        raise HTTPException(404, "Local demo page requires LENS_FAKE_MODE=true")
+    return FileResponse(Path(__file__).parent / "demo_web" / "index.html")
+
+
+@app.get("/demo/assets/concert.png", include_in_schema=False)
+def concert_asset() -> FileResponse:
+    if not settings.fake_mode:
+        raise HTTPException(404, "Not found")
+    return FileResponse(Path(__file__).parent / "demo_web" / "concert.png", media_type="image/png")
+
+
+@app.post("/demo/cuj", include_in_schema=False)
+def concert_journey(request: cuj.CUJRequest) -> dict:
+    if not settings.fake_mode:
+        raise HTTPException(404, "Not found")
+    return cuj.run(db, request)
+
+
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "extractor": settings.extractor, "cloud_fallback": settings.cloud_fallback,
+    return {"ok": True, "fake_mode": settings.fake_mode,
+            "extractor": "fake-demo" if settings.fake_mode else settings.extractor,
+            "cloud_fallback": False if settings.fake_mode else settings.cloud_fallback,
             "queue": queue.qsize(), **stats}
 
 

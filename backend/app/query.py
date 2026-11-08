@@ -80,6 +80,10 @@ def build_context(db: DB, question: str, now: float | None = None) -> dict:
 
 
 def answer(db: DB, question: str) -> tuple[LensAnswer, dict]:
+    if settings.fake_mode:
+        from .demo import answer_demo
+
+        return answer_demo(db, question)
     context = build_context(db, question)
     start = time.perf_counter()
     try:

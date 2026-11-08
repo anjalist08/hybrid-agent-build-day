@@ -2,15 +2,23 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var concertPlan: ConcertDemoPlan?
-    @State private var showAssistant = false
+    private struct AssistantRequest: Identifiable {
+        let id = UUID()
+        let question: String
+    }
+    @State private var assistantRequest: AssistantRequest?
+    @State private var refreshID = UUID()
     @State private var showSettings = false
     @State private var showRoutes = false
     @State private var showTickets = false
 
     var body: some View {
         NavigationStack {
-            RecommendationHomeView(plan: concertPlan) {
-                showConcert = true
+            BackendHomeView(plan: concertPlan, refreshID: refreshID, onAsk: { question in
+                assistantRequest = AssistantRequest(question: question)
+            }, onOpenDemo: { showDemoHome = true })
+            .navigationDestination(isPresented: $showDemoHome) {
+                RecommendationHomeView(plan: concertPlan) { showConcert = true }
             }
             .navigationDestination(isPresented: $showConcert) {
                 ConcertDetailView { showTickets = true }
@@ -23,17 +31,19 @@ struct ContentView: View {
                     .accessibilityLabel("Where it ran")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { showAssistant = true } label: { Image(systemName: "waveform") }
+                    Button { assistantRequest = AssistantRequest(question: "") } label: { Image(systemName: "waveform") }
                         .accessibilityLabel("Ask Lens")
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
                         .accessibilityLabel("Settings")
                 }
             }
-            .sheet(isPresented: $showAssistant) { AssistantChatView() }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(item: $assistantRequest) { request in
+                AssistantChatView(initialQuestion: request.question)
+            }
+            .sheet(isPresented: $showSettings, onDismiss: { refreshID = UUID() }) { SettingsView() }
             .sheet(isPresented: $showRoutes) { RoutingView() }
             .sheet(isPresented: $showTickets, onDismiss: {
-                if concertPlan != nil { showConcert = false }
+                if concertPlan != nil { showConcert = false; showDemoHome = false }
             }) {
                 TicketFlowView { concertPlan = $0 }
             }
@@ -50,10 +60,12 @@ struct ContentView: View {
         #endif
     }
 
+    @State private var showDemoHome = false
     @State private var showConcert = false
 }
 
 struct AssistantChatView: View {
+    var initialQuestion = ""
     @StateObject private var model = AppModel()
     @StateObject private var voice = VoiceController()
     @State private var typed = ""
@@ -95,6 +107,9 @@ struct AssistantChatView: View {
         .task {
             await voice.requestPermissions()
             await model.refreshStatus()
+            if !initialQuestion.isEmpty {
+                await model.ask(initialQuestion, source: "suggestion", voice: voice)
+            }
         }
         .onReceive(statusTimer) { _ in Task { await model.refreshStatus() } }
     }
@@ -113,7 +128,11 @@ struct AssistantChatView: View {
                     if let err = model.uploadError {
                         Text("Upload error: \(err)").foregroundStyle(.red)
                     } else if let h = model.health {
-                        Text("\(model.framesSent) sent · \(h.processed) read · \(h.deduped) same-screen · \(h.queue) queued")
+                        if h.fakeMode == true {
+                            Text("Demo mode · Fictional history · No AI calls")
+                        } else {
+                            Text("\(model.framesSent) sent · \(h.processed) read · \(h.deduped) same-screen · \(h.queue) queued")
+                        }
                     } else {
                         Text("Backend unreachable: \(SharedConfig.backendURL.absoluteString)").foregroundStyle(.orange)
                     }
@@ -142,6 +161,11 @@ struct AssistantChatView: View {
         }
         if let error = model.error ?? voice.permissionError {
             Text(error).font(.footnote).foregroundStyle(.red)
+            if model.error != nil && !model.lastQuestion.isEmpty {
+                Button("Try question again") {
+                    Task { await model.ask(model.lastQuestion, source: "retry", voice: voice) }
+                }.font(.footnote.weight(.semibold)).disabled(model.isThinking)
+            }
         }
         if let answer = model.answer, !model.isThinking {
             Text(answer.speech).font(.body)
@@ -166,6 +190,7 @@ struct AssistantChatView: View {
         HStack(spacing: 12) {
             TextField("Ask about what you've seen…", text: $typed)
                 .textFieldStyle(.roundedBorder)
+                .disabled(model.isThinking)
                 .submitLabel(.send)
                 .onSubmit {
                     let q = typed
@@ -173,6 +198,8 @@ struct AssistantChatView: View {
                     Task { await model.ask(q, source: "typed", voice: voice) }
                 }
             micButton
+                .allowsHitTesting(!model.isThinking)
+                .opacity(model.isThinking ? 0.5 : 1)
         }
         .padding()
         .background(.bar)
@@ -210,7 +237,7 @@ struct RouteBadges: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 badge("Speech", sttOnDevice ? "on-device" : "Apple", .green)
-                badge("Screens", "local model", .green)
+                badge("Screens", route.model == "fake-demo" ? "not analyzed · demo" : "configured extractor", .green)
                 badge("Answer", "\(route.model) · \(String(format: "%.1fs", Double(route.ms) / 1000))", .blue)
                 badge("Sent to cloud", "\(route.impressionsSent ?? 0) text rows, \(route.imagesSent ?? 0) images", .orange)
             }
@@ -270,6 +297,15 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var url = SharedConfig.backendURL.absoluteString
     @State private var interval = SharedConfig.captureInterval
+    @State private var testing = false
+    @State private var connectionResult: String?
+
+    private var validURL: URL? {
+        guard let value = URL(string: url.trimmingCharacters(in: .whitespacesAndNewlines)),
+              ["http", "https"].contains(value.scheme?.lowercased() ?? ""), value.host != nil,
+              value.query == nil, value.fragment == nil, value.user == nil, value.password == nil else { return nil }
+        return value
+    }
 
     var body: some View {
         NavigationStack {
@@ -279,6 +315,26 @@ struct SettingsView: View {
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .onChange(of: url) { _, _ in connectionResult = nil }
+                    Button(testing ? "Testing connection…" : "Test connection") {
+                        guard let address = validURL else { return }
+                        testing = true
+                        connectionResult = nil
+                        Task {
+                            do {
+                                let health = try await LensAPI.health(baseURL: address)
+                                if validURL == address {
+                                    connectionResult = health.ok ? "Connected · \(health.extractor) · \(health.processed) frames read" : "Backend is not ready."
+                                }
+                            } catch {
+                                if validURL == address { connectionResult = error.localizedDescription }
+                            }
+                            testing = false
+                        }
+                    }.disabled(testing || validURL == nil)
+                    if let connectionResult { Text(connectionResult).font(.caption) }
+                    Text("Simulator: http://localhost:8000. On a real iPhone, enter your laptop's LAN or Tailscale address; localhost points to the phone itself.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Section {
                     Stepper("Every \(Int(interval)) s", value: $interval, in: 2...30, step: 1)
@@ -292,10 +348,10 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        SharedConfig.setBackendURL(url)
+                        SharedConfig.setBackendURL(validURL?.absoluteString ?? url)
                         SharedConfig.captureInterval = interval
                         dismiss()
-                    }
+                    }.disabled(validURL == nil || testing)
                 }
             }
         }

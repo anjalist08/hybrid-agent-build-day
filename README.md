@@ -66,12 +66,19 @@ curl -F video=@recording.mp4 -F every_s=3 http://localhost:8000/ingest/video
 curl -X POST localhost:8000/query -H 'content-type: application/json' -d '{"text":"what did I watch about AI?"}'
 ```
 
+### iOS backend connection
+
+The home screen reads backend health, topics and recent activity. Tap a topic or
+history item to ask through `/query`. Settings includes address validation and a
+**Test connection** button. See [connection setup and verification](docs/backend-connection.md).
+The concert flow remains a separate UI demo.
+
 ### Figma concert-flow preview
 
 See [UI demo screenshots and walkthrough](docs/ui-demo.md).
 
-The app now opens to a sample personal-suggestions screen. Tap **Take a look**,
-then **Find tickets** to walk through disclosure, sample tickets, seated filtering,
+Open **Concert walkthrough** from the backend home for the sample personal-suggestions
+screen. Tap **Take a look**, then **Find tickets** to walk through disclosure, sample tickets, seated filtering,
 invitation/calendar drafts, and a final plan. This flow runs locally with fictional
 data; it does not search providers, purchase tickets, send messages, write calendar
 events, or persist memory preferences. The fixed lock-screen time/date are design
@@ -109,3 +116,10 @@ backend/   FastAPI service: ingest, local vision extraction, knowledge base, Cla
 ios/       XcodeGen spec, SwiftUI app (Lens/), ReplayKit extension (LensBroadcast/), Shared/
 docs/      notes, demo script, architecture sketches
 ```
+
+### Local Figma CUJ preview
+
+Run the backend with `./run.sh --fake`, then open `http://localhost:8000/demo`.
+The English product preview follows the Figma concert journey. See
+[developer-only demo status](docs/demo-status.md) for working, simulated and
+unverified functionality. Those explanations are not part of the product UI.

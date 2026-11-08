@@ -114,6 +114,11 @@ def extract_claude(jpeg: bytes) -> FrameObservation:
 
 def extract(db: DB, jpeg: bytes) -> tuple[FrameObservation, str]:
     """Returns (observation, extractor label). Raises if every allowed route fails."""
+    if settings.fake_mode:
+        # Rehearse ingestion without pretending to understand uploaded pixels.
+        db.log_route("extract", "local", "fake-demo", 0, True,
+                     "SIMULATED: frame ignored; no vision model or network call")
+        return FrameObservation(app="Demo", screen_kind="other", sensitive=False, items=[]), "local:fake-demo"
     jpeg = prepare_image(jpeg)
     routes: list[tuple[str, str, callable]] = []
     if settings.extractor == "claude":

@@ -11,7 +11,9 @@ def _bool(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
-    data_dir: Path = Path(os.environ.get("LENS_DATA_DIR", "data"))
+    fake_mode: bool = _bool("LENS_FAKE_MODE", False)
+    # Keep fictional history separate from the real knowledge base by default.
+    data_dir: Path = Path(os.environ.get("LENS_DATA_DIR", "data-demo" if _bool("LENS_FAKE_MODE", False) else "data"))
     # "ollama" keeps screenshots on this machine; "claude" sends them to the cloud.
     extractor: str = os.environ.get("LENS_EXTRACTOR", "ollama")
     # If the local extractor fails, retry in the cloud (off = strict local-only privacy mode).

@@ -40,3 +40,5 @@ ios/Config/Local.xcconfig
 xcuserdata/
 DerivedData/
 *.xcresult
+
+backend/data-demo/

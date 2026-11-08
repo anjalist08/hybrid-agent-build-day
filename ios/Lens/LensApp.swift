@@ -25,8 +25,10 @@ final class AppModel: ObservableObject {
 
     func ask(_ text: String, source: String, voice: VoiceController) async {
         let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !question.isEmpty else { return }
+        guard !question.isEmpty, !isThinking else { return }
         lastQuestion = question
+        answer = nil
+        route = nil
         isThinking = true
         error = nil
         defer { isThinking = false }

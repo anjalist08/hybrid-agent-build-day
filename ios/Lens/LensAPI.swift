@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 // Mirrors backend/app/schemas.py. Keep in sync.
 
@@ -72,6 +75,7 @@ struct RouteLogEntry: Decodable, Identifiable {
 
 struct Health: Decodable {
     let ok: Bool
+    let fakeMode: Bool?
     let extractor: String
     let queue: Int
     let received: Int
@@ -80,11 +84,35 @@ struct Health: Decodable {
     let failed: Int
 }
 
+struct MemoryInterest: Decodable, Identifiable {
+    let type: String
+    let name: String
+    let score: Double
+    let impressions: Int
+    let dwellS: Double
+    var id: String { type + ":" + name }
+}
+
+struct MemoryImpression: Decodable, Identifiable {
+    let id: Int
+    let app: String
+    let kind: String
+    let title: String
+    let author: String?
+    let summary: String?
+    let tsEnd: Double
+    let dwellS: Double
+}
+
 enum LensAPIError: LocalizedError {
     case server(Int, String)
+    case invalidURL
+    case invalidResponse
 
     var errorDescription: String? {
         switch self {
+        case .invalidURL: return "Enter a valid http:// or https:// backend address."
+        case .invalidResponse: return "The backend returned an invalid response."
         case let .server(code, body): return "Backend error \(code): \(body.prefix(200))"
         }
     }
@@ -98,8 +126,15 @@ enum LensAPI {
     }()
 
     private static func send<T: Decodable>(_ path: String, method: String = "GET", body: Data? = nil,
-                                           timeout: TimeInterval = 60) async throws -> T {
-        var request = URLRequest(url: SharedConfig.backendURL.appendingPathComponent(path))
+                                           timeout: TimeInterval = 60, baseURL: URL = SharedConfig.backendURL,
+                                           query: [URLQueryItem] = []) async throws -> T {
+        guard ["http", "https"].contains(baseURL.scheme?.lowercased() ?? ""), baseURL.host != nil,
+              var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false) else {
+            throw LensAPIError.invalidURL
+        }
+        if !query.isEmpty { components.queryItems = query }
+        guard let url = components.url else { throw LensAPIError.invalidURL }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = timeout
         if let body {
@@ -107,7 +142,8 @@ enum LensAPI {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+        guard let http = response as? HTTPURLResponse else { throw LensAPIError.invalidResponse }
+        if !(200..<300).contains(http.statusCode) {
             throw LensAPIError.server(http.statusCode, String(decoding: data, as: UTF8.self))
         }
         return try decoder.decode(T.self, from: data)
@@ -118,11 +154,19 @@ enum LensAPI {
         return try await send("query", method: "POST", body: body)
     }
 
+    static func interests() async throws -> [MemoryInterest] {
+        try await send("interests", query: [URLQueryItem(name: "type", value: "topic"), URLQueryItem(name: "limit", value: "5")])
+    }
+
+    static func impressions() async throws -> [MemoryImpression] {
+        try await send("impressions", query: [URLQueryItem(name: "limit", value: "5")])
+    }
+
     static func routes() async throws -> [RouteLogEntry] {
         try await send("routes")
     }
 
-    static func health() async throws -> Health {
-        try await send("health", timeout: 5)
+    static func health(baseURL: URL = SharedConfig.backendURL) async throws -> Health {
+        try await send("health", timeout: 5, baseURL: baseURL)
     }
 }

@@ -16,7 +16,7 @@ Actual app renders captured on an iPhone 17 Pro simulator (iOS 26.3), November 8
 
 ## Try the flow
 
-1. Open the app and select **Take a look**.
+1. Open **Concert walkthrough** from the backend home, then select **Take a look**.
 2. Scroll through the concert detail and select **Find tickets**.
 3. Review the request and the disclosure of what an online provider would receive.
 4. Simulate an online search or stay offline to view fictional ticket options.
