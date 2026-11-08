@@ -281,7 +281,9 @@ function Plan({ seat, onRestart }: { seat: number; onRestart: () => void }) {
 
 function ChatView({ chat }: { chat: ChatItem[] }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth" }), [chat]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chat]);
   return (
     <div className="space-y-4">
       <Title h="Ask your messages." sub="Searches your personal history on this device." />
