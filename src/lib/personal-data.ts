@@ -39,7 +39,7 @@ export function searchMessages(query: string): Message[] {
     (SYNONYMS[w] ?? []).forEach((s) => terms.add(s));
     if (!STOP.has(w)) terms.add(w);
   }
-  if (terms.size === 0) SYNONYMS.time.forEach((s) => terms.add(s));
+  if (terms.size === 0) (SYNONYMS["time"] ?? []).forEach((s) => terms.add(s));
   return MESSAGES.filter((m) => m.from === "Mia")
     .map((m) => {
       const t = m.text.toLowerCase();
@@ -62,6 +62,6 @@ export function summarize(hits: Message[]): string {
   if (t.includes("standing") || t.includes("seats")) out.push("She'd rather have **seats than standing GA**.");
   if (t.includes("dinner") || t.includes("hangry")) out.push("She likes **dinner before** the show, near the venue.");
   if (t.includes("maggie")) out.push("She's been listening to Maggie Rogers a lot.");
-  if (!out.length) out.push(`Mia mentioned: "${hits[0].text}"`);
+  if (!out.length) out.push(`Mia mentioned: "${hits[0]?.text ?? ""}"`);
   return out.join(" ");
 }

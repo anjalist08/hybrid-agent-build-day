@@ -193,7 +193,7 @@ const MIA_STEPS = [
 
 function MiaTime({ onNext }: { onNext: () => void }) {
   const [n, setN] = useState(0);
-  useEffect(() => { if (n <= MIA_STEPS.length) { const t = setTimeout(() => setN(n + 1), 700); return () => clearTimeout(t); } }, [n]);
+  useEffect(() => { if (n <= MIA_STEPS.length) { const t = setTimeout(() => setN(n + 1), 700); return () => clearTimeout(t); } return undefined; }, [n]);
   const hits = searchMessages("when is mia free friday seats");
   const done = n > MIA_STEPS.length;
   return (
@@ -235,7 +235,7 @@ function Hits({ hits }: { hits: Message[] }) {
 }
 
 function Invite({ seat, onNext }: { seat: number; onNext: () => void }) {
-  const o = OPTIONS[seat];
+  const o = OPTIONS[seat] ?? OPTIONS[1]!;
   return (
     <>
       <Title h="A plan is taking shape." sub="You confirmed both actions." />
@@ -269,7 +269,7 @@ function Plan({ seat, onRestart }: { seat: number; onRestart: () => void }) {
       <Title h="Friday, looking good." sub="The plan is saved. The night is still yours." />
       <EventCard />
       <div className="rounded-2xl border divide-y text-sm mb-6">
-        {[`$${OPTIONS[seat].price} — ${OPTIONS[seat].label}`, "Dinner with Mia at 6:45", "Mia is invited", "Friday is on your calendar"].map((t) => (
+        {[`$${(OPTIONS[seat] ?? OPTIONS[1]!).price} — ${(OPTIONS[seat] ?? OPTIONS[1]!).label}`, "Dinner with Mia at 6:45", "Mia is invited", "Friday is on your calendar"].map((t) => (
           <p key={t} className="p-3.5">{t}</p>
         ))}
       </div>
