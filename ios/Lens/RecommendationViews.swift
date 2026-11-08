@@ -8,6 +8,7 @@ private enum RecommendationStyle {
 
 /// Personal suggestions are sample content until live recommendation APIs are connected.
 struct RecommendationHomeView: View {
+    var plan: ConcertDemoPlan? = nil
     let onOpenConcert: () -> Void
 
     @State private var dismissedConcert = false
@@ -23,7 +24,34 @@ struct RecommendationHomeView: View {
                 }
                 .frame(maxWidth: .infinity).padding(.top, 32).padding(.bottom, 52)
 
-                if !dismissedConcert {
+                if let plan {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Label("YOUR FRIDAY PLAN", systemImage: "checkmark.circle")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.gray)
+                        Text("A night to look forward to.").font(.title2.weight(.medium))
+                        Text("Friday · 7:30 PM · 2 × \(plan.seating)")
+                            .font(.subheadline).foregroundStyle(Color(white: 0.75))
+                        Text("$\(plan.pricePerTicket * 2) sample total, before fees")
+                            .font(.subheadline)
+                        HStack(spacing: 16) {
+                            Label(plan.invitationIncluded ? "Invite draft" : "No invite", systemImage: "envelope")
+                            Label(plan.calendarIncluded ? "Calendar draft" : "No calendar", systemImage: "calendar")
+                        }.font(.caption).foregroundStyle(.gray)
+                        if plan.rememberSeating || plan.rememberBudget {
+                            Text([plan.rememberSeating ? "Seated tickets" : nil,
+                                  plan.rememberBudget ? "Under $150 each" : nil]
+                                .compactMap { $0 }.joined(separator: " · "))
+                                .font(.caption).foregroundStyle(.gray)
+                        }
+                        Text("Sample plan · Nothing booked or sent · Kept for this session")
+                            .font(.caption2).foregroundStyle(.gray)
+                        Button("Explore another night", action: onOpenConcert)
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                    }.padding(.vertical, 24)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(alignment: .top) { Rectangle().fill(Color(white: 0.23)).frame(height: 0.5) }
+                }
+                if !dismissedConcert && plan == nil {
                     suggestion(title: "Friday night", time: "now", text: "Your favorite artist is playing Friday, and your calendar is clear. Interested?") {
                         HStack(spacing: 24) {
                             Button("Take a look", action: onOpenConcert)
@@ -112,6 +140,11 @@ struct ConcertDetailView: View {
                         .font(.caption).foregroundStyle(.secondary).lineSpacing(4)
                 }.padding(.horizontal, 4)
 
+            }
+            .padding(24).frame(maxWidth: 560).frame(maxWidth: .infinity)
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 12) {
                 Button(action: onFindTickets) {
                     HStack {
                         Text("Find tickets").font(.subheadline.weight(.semibold))
@@ -125,7 +158,9 @@ struct ConcertDetailView: View {
                     .font(.caption2).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
             }
-            .padding(24).frame(maxWidth: 560).frame(maxWidth: .infinity)
+            .padding(.horizontal, 24).padding(.vertical, 14)
+            .background(.white)
+            .overlay(alignment: .top) { Divider() }
         }
         .background(RecommendationStyle.background)
         .foregroundStyle(RecommendationStyle.ink)
@@ -151,31 +186,40 @@ struct ConcertDetailView: View {
 /// A bundled, scalable illustration keeps the demo usable without image downloads.
 private struct ConcertArtwork: View {
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                LinearGradient(colors: [Color(red: 0.23, green: 0.10, blue: 0.26), Color(red: 0.65, green: 0.22, blue: 0.22), Color(red: 0.98, green: 0.57, blue: 0.23)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Circle().fill(Color.orange.opacity(0.4)).frame(width: 200, height: 200)
-                    .blur(radius: 22).offset(x: 100, y: -50)
-                ForEach(0..<7) { index in
-                    Rectangle().fill(Color.white.opacity(index.isMultiple(of: 2) ? 0.12 : 0.06))
-                        .frame(width: 30, height: geometry.size.height * 1.8)
-                        .rotationEffect(.degrees(Double(index * 11 - 35)))
-                        .offset(x: CGFloat(index * 43 - 125), y: -60)
+        Rectangle()
+            .fill(LinearGradient(
+                colors: [Color(red: 0.23, green: 0.10, blue: 0.26),
+                         Color(red: 0.65, green: 0.22, blue: 0.22),
+                         Color(red: 0.98, green: 0.57, blue: 0.23)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            ))
+            .overlay {
+                GeometryReader { geometry in
+                    ZStack {
+                        ForEach(0..<7) { index in
+                            Rectangle().fill(Color.white.opacity(index.isMultiple(of: 2) ? 0.12 : 0.06))
+                                .frame(width: 30, height: geometry.size.height * 1.8)
+                                .rotationEffect(.degrees(Double(index * 11 - 35)))
+                                .position(x: CGFloat(index) * geometry.size.width / 6, y: 70)
+                        }
+                    }
                 }
-                VStack(spacing: 12) {
-                    Spacer()
+            }
+            .overlay {
+                VStack(spacing: 14) {
                     Image(systemName: "waveform").font(.system(size: 60, weight: .ultraLight))
                     Text("THE NIGHT IS YOURS").font(.system(size: 11, weight: .semibold)).tracking(4)
-                    Spacer().frame(height: 35)
-                }.foregroundStyle(Color.white.opacity(0.95))
-                HStack(alignment: .bottom, spacing: 9) {
+                }.foregroundStyle(.white)
+            }
+            .overlay(alignment: .bottom) {
+                HStack(alignment: .bottom, spacing: 6) {
                     ForEach(0..<19) { index in
                         Capsule().fill(Color.black.opacity(0.65))
-                            .frame(width: geometry.size.width / 16, height: CGFloat(22 + (index * 13) % 33))
+                            .frame(height: CGFloat(22 + (index * 13) % 33))
                     }
-                }.frame(maxHeight: .infinity, alignment: .bottom).offset(y: 11)
-            }.clipped()
-        }
-        .accessibilityLabel("Warm stage lights over a concert crowd")
+                }.offset(y: 11)
+            }
+            .clipped()
+            .accessibilityLabel("Warm stage lights over a concert crowd")
     }
 }

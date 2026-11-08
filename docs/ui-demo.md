@@ -10,6 +10,10 @@ Actual app renders captured on an iPhone 17 Pro simulator (iOS 26.3), November 8
 | --- | --- | --- |
 | <img src="screenshots/demo-home.png" width="260" alt="Black personal suggestions screen"> | <img src="screenshots/demo-concert.png" width="260" alt="Concert recommendation detail"> | <img src="screenshots/demo-ticket-request.png" width="260" alt="Ticket request demo"> |
 
+| Ticket options | Memory choices | Final plan |
+| --- | --- | --- |
+| <img src="screenshots/demo-ticket-options.png" width="260" alt="Selectable ticket options with seated filter"> | <img src="screenshots/demo-memory.png" width="260" alt="Optional memory choices"> | <img src="screenshots/demo-final-plan.png" width="260" alt="Sample plan summary"> |
+
 ## Try the flow
 
 1. Open the app and select **Take a look**.
@@ -17,7 +21,8 @@ Actual app renders captured on an iPhone 17 Pro simulator (iOS 26.3), November 8
 3. Review the request and the disclosure of what an online provider would receive.
 4. Simulate an online search or stay offline to view fictional ticket options.
 5. Choose a ticket, optionally filter for seated tickets, and review invitation/calendar drafts.
-6. Finish the sample plan and optionally toggle temporary preference choices.
+6. Choose temporary memory preferences or skip remembering entirely.
+7. Finish the sample plan and select **Keep plan on my home**. The homepage keeps the seating, total, draft choices and optional preferences until the app session ends.
 
 The waveform toolbar button opens the original voice/text assistant. Settings and routing logs remain accessible from the homepage toolbar.
 
@@ -35,3 +40,5 @@ xcrun simctl io <device-id> screenshot docs/screenshots/demo-concert.png
 ```
 
 Terminate the app before relaunching with a different preview argument. Launch without preview arguments for the homepage.
+
+Use `--preview-tickets --ticket-step=3` for ticket options, `--ticket-step=5` for memory choices, or `--ticket-step=6` for the final plan in a Debug build. These launch arguments only select a preview screen; captures do not verify navigation between screens.

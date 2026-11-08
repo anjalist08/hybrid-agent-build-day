@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var concertPlan: ConcertDemoPlan?
     @State private var showAssistant = false
     @State private var showSettings = false
     @State private var showRoutes = false
@@ -8,7 +9,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            RecommendationHomeView {
+            RecommendationHomeView(plan: concertPlan) {
                 showConcert = true
             }
             .navigationDestination(isPresented: $showConcert) {
@@ -31,7 +32,11 @@ struct ContentView: View {
             .sheet(isPresented: $showAssistant) { AssistantChatView() }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showRoutes) { RoutingView() }
-            .sheet(isPresented: $showTickets) { TicketFlowView() }
+            .sheet(isPresented: $showTickets, onDismiss: {
+                if concertPlan != nil { showConcert = false }
+            }) {
+                TicketFlowView { concertPlan = $0 }
+            }
         }
         .tint(.primary)
         .preferredColorScheme(.light)

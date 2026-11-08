@@ -1,9 +1,20 @@
 import SwiftUI
 
 /// A self-contained, local demo. No ticket, messaging, or calendar services are called.
+struct ConcertDemoPlan {
+    let seating: String
+    let pricePerTicket: Int
+    let invitationIncluded: Bool
+    let calendarIncluded: Bool
+    let rememberSeating: Bool
+    let rememberBudget: Bool
+}
+
 struct TicketFlowView: View {
+    var onComplete: (ConcertDemoPlan) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
     @State private var step: Step = .request
+    @FocusState private var queryFocused: Bool
     @State private var query = "Find two tickets for Friday night, under $150 each."
     @State private var seatedOnly = false
     @State private var selectedTicket = 0
@@ -15,7 +26,7 @@ struct TicketFlowView: View {
     private let accent = Color(red: 0.43, green: 0.30, blue: 0.83)
 
     private enum Step: Int, CaseIterable {
-        case request, permission, searching, tickets, drafts, complete
+        case request, permission, searching, tickets, drafts, memory, complete
     }
 
     private struct Ticket {
@@ -36,7 +47,7 @@ struct TicketFlowView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     HStack(spacing: 6) {
-                        ForEach(0..<5) { index in
+                        ForEach(0..<6) { index in
                             Capsule().fill(index <= progressIndex ? accent : Color.black.opacity(0.09)).frame(height: 3)
                         }
                     }
@@ -55,6 +66,10 @@ struct TicketFlowView: View {
                 .frame(maxWidth: 600, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
+            .id(step)
+            .onChange(of: step) { _, _ in queryFocused = false }
+            .scrollDismissesKeyboard(.interactively)
+            .defaultScrollAnchor(.top)
             .background(background.ignoresSafeArea())
             .foregroundStyle(Color.black)
             .navigationTitle("Lens")
@@ -74,6 +89,16 @@ struct TicketFlowView: View {
             }
         }
         .tint(accent)
+        .preferredColorScheme(.light)
+        #if DEBUG
+        .task {
+            if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ticket-step=") }),
+               let value = Int(argument.split(separator: "=").last ?? ""),
+               let preview = Step(rawValue: value) {
+                step = preview
+            }
+        }
+        #endif
     }
 
     private var progressIndex: Int { step == .searching ? 1 : max(0, step.rawValue - (step.rawValue > 2 ? 1 : 0)) }
@@ -86,6 +111,7 @@ struct TicketFlowView: View {
                 Label("YOUR REQUEST", systemImage: "waveform").font(.caption.weight(.bold)).foregroundStyle(accent)
                 TextField("What would you like to find?", text: $query, axis: .vertical)
                     .font(.title3.weight(.medium)).lineLimit(3...5)
+                    .focused($queryFocused)
                 Text("Type a request to try the demo. Voice recording is not active here.").font(.caption).foregroundStyle(.secondary)
             }
             Label("2 people  ·  Friday evening", systemImage: "person.2").font(.subheadline)
@@ -150,8 +176,9 @@ struct TicketFlowView: View {
                             }
                         }
                         .padding(18).background(.white, in: RoundedRectangle(cornerRadius: 20))
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(selectedTicket == index ? accent : .clear, lineWidth: 1.5))
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(selectedTicket == index ? accent : Color.black.opacity(0.12), lineWidth: 1.5))
                     }.buttonStyle(.plain)
+                        .accessibilityAddTraits(selectedTicket == index ? .isSelected : [])
                 }
             }
             Text("Demo prices only. Availability, fees, and event details are fictional. No tickets are reserved or purchased.").font(.caption).foregroundStyle(.secondary)
@@ -167,30 +194,55 @@ struct TicketFlowView: View {
             card {
                 Toggle("Calendar draft", isOn: $includeCalendar).font(.headline)
                 Text("Friday concert night").font(.subheadline.weight(.semibold))
-                Text("Friday · 7:00–10:00 PM\nVenue and event date to be confirmed")
+                Text("Friday · 7:30–10:00 PM\nVenue and event date to be confirmed")
                     .font(.subheadline).foregroundStyle(.secondary)
                 Label("Preview only · No calendar access", systemImage: "calendar").font(.caption).foregroundStyle(accent)
             }
-            action("Finish demo plan", icon: "checkmark") { step = .complete }
+            action("Review memory choices", icon: "arrow.right") { step = .memory }
+        case .memory:
+            heading("Choose what\nto remember.", subtitle: "A good suggestion should leave you in control.")
+            card {
+                Label("OPTIONAL MEMORY", systemImage: "brain.head.profile").font(.caption.weight(.bold)).foregroundStyle(accent)
+                Text("Keep only what helps next time.").font(.headline)
+                Text("These choices stay with your sample plan for this app session. Nothing is stored in your private knowledge base.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Toggle("I prefer seated tickets", isOn: $rememberSeating)
+                Divider()
+                Toggle("Keep my budget under $150", isOn: $rememberBudget)
+            }
+            action("Finish sample plan", icon: "checkmark") { step = .complete }
+            Button("Continue without remembering") {
+                rememberSeating = false
+                rememberBudget = false
+                step = .complete
+            }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity)
         case .complete:
             Image(systemName: "checkmark.circle.fill").font(.system(size: 48)).foregroundStyle(accent)
             heading("Friday looks\ngood on you.", subtitle: "Your sample plan is ready to review.")
             card {
                 Text("CONCERT NIGHT").font(.caption.weight(.bold)).foregroundStyle(accent)
-                Text("Friday · 7 PM").font(.title2.weight(.semibold))
+                Text("Friday · 7:30 PM").font(.title2.weight(.semibold))
                 Text("2 × \(tickets[selectedTicket].title) · $\(tickets[selectedTicket].price * 2) sample total, before fees").font(.subheadline)
                 Divider()
                 Label(includeInvite ? "Invitation draft included" : "Invitation draft skipped", systemImage: "envelope")
                 Label(includeCalendar ? "Calendar draft included" : "Calendar draft skipped", systemImage: "calendar")
                 Text("Nothing was booked, sent, or added to your calendar.").font(.caption).foregroundStyle(.secondary)
             }
-            card {
-                Text("Keep this in mind?").font(.headline)
-                Text("Optional preferences for this demo session only.").font(.caption).foregroundStyle(.secondary)
-                Toggle("I prefer seated tickets", isOn: $rememberSeating)
-                Toggle("Keep my budget under $150", isOn: $rememberBudget)
+            if rememberSeating || rememberBudget {
+                Label("Preferences attached to this sample plan only", systemImage: "lock.shield")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            action("Done", icon: "checkmark") { dismiss() }
+            action("Keep plan on my home", icon: "checkmark") {
+                onComplete(ConcertDemoPlan(
+                    seating: tickets[selectedTicket].title,
+                    pricePerTicket: tickets[selectedTicket].price,
+                    invitationIncluded: includeInvite,
+                    calendarIncluded: includeCalendar,
+                    rememberSeating: rememberSeating,
+                    rememberBudget: rememberBudget
+                ))
+                dismiss()
+            }
         }
     }
 
