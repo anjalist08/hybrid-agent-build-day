@@ -112,7 +112,7 @@ final class AgentStore {
         }
         var request = URLRequest(url: SharedConfig.backendURL.appendingPathComponent("agent/chat"))
         request.httpMethod = "POST"
-        request.timeoutInterval = 120
+        request.timeoutInterval = 300
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["messages": history])
         do {
@@ -129,7 +129,10 @@ final class AgentStore {
                 case "status":
                     switch event["status"] as? String {
                     case "thinking": reply.status = "Thinking it through…"
-                    case "tool": reply.status = "Looking through your screen memory on your Mac…"
+                    case "tool":
+                        reply.status = (event["tool"] as? String) == "research_topic"
+                            ? "Researching people and companies on the web… (about a minute)"
+                            : "Looking through your screen memory on your Mac…"
                     default: reply.status = "Putting it together…"
                     }
                 case "delta":

@@ -558,5 +558,46 @@
         }
       }
     }
+  },
+  {
+    "name": "save_to_notion",
+    "description": "Save a research result (from the research_topic tool) to the user's Notion: the blog post or note plus linked People, Organizations, Sources and Topic pages. Write operation — use with Mutation(), only from an 'Add to Notion' button.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "research_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "research_id"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "hub_url": {
+          "type": "string"
+        },
+        "people": {
+          "type": "number"
+        },
+        "organizations": {
+          "type": "number"
+        },
+        "sources": {
+          "type": "number"
+        }
+      }
+    }
   }
 ]

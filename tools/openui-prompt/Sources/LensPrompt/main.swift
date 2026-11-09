@@ -57,6 +57,8 @@ let rules = [
     "Questions about the user's own activity (what they read, watched or saw; time on an app; a person or topic they looked at) — call the recall tool first, with source set when they name an app (X/Twitter → \"x\", Messages/iMessage/WhatsApp → \"messages\") and hours for 'today' (24) or 'this week' (168). Answer with a Card: CardHeader, one TextContent sentence that answers, then a ListBlock of the items (title, subtitle \"@author · app · when\", action @OpenUrl(link)). Use a HorizontalBarChart only when they ask about time spent.",
     "If recall says the requested source is switched off (source_enabled false), say so in one sentence and that it can be turned on in Settings → Screen memory remembers. If there are no items, say nothing was captured for that yet — don't invent items.",
     "Recall answers never mention travel, booking or other features, and use FollowUpBlock only with follow-ups about the same activity (e.g. 'Only posts from today').",
+    "Research: only when the user explicitly asks to research a topic, write about it or save it to Notion, call research_topic (it takes about a minute). Then reply with ONE Card like the research example: CardHeader (topic + how many things they saw), a TagBlock with \"Blog post · unique angle\" or \"Note\" and the decision reason as TextContent, the summary, a Table of people (Name, Affiliation, Role), a ListBlock of organizations with @OpenUrl to their website, a ListBlock of what they saw, then an \"Add to Notion\" button running Mutation(\"save_to_notion\", {research_id: ...}) with success/error Callouts and an \"Open in Notion\" button on success.",
+    "Never save to Notion without the user tapping Add to Notion. Never invent people, affiliations or links beyond the research result.",
     "Trips: everything below applies only when the user shares a chat/email about a trip or asks to plan or book one.",
     "Conversation stage 1 (a pasted chat/email): reply with a TRIP PLAN card — CardHeader with a trip name and dates, TagBlock of travelers, Steps for the day-by-day itinerary, a Callout quoting constraints from the chat, and a Form named \"plan\" with origin, destination, depart, return and travelers fields bound to $variables, ending with a primary button that sends @ToAssistant(\"Confirm the plan and find options\").",
     "Do NOT search or book in stage 1. Infer missing details sensibly (nearest major airport, a Friday–Monday weekend) and say what you assumed in the Callout.",
@@ -81,6 +83,30 @@ i1 = ListItem("Hot take: on-device small models + cloud planner is the architect
 i2 = ListItem("What a race in Las Vegas. Proud of the team.", "@LewisHamilton · X · 3h ago", null, "Open", Action([@OpenUrl("https://x.com/search?q=Las+Vegas+race")]))
 i3 = ListItem("Shipping agents that work: lessons from 50 deployments", "@swyx · X · 5h ago", null, "Open", Action([@OpenUrl("https://x.com/search?q=shipping+agents")]))
 followUps = FollowUpBlock([FollowUpItem("Only posts about AI"), FollowUpItem("How long was I on X this week?")])
+```
+"""#
+
+let researchExample = #"""
+Example — the user asked "research recursive self-improvement and add it to my Notion"; research_topic returned research_id "res_1a2b3c4d" (names below are placeholders — always use the real result):
+
+```openui-lang
+root = Card([header, decision, why, summary, peopleHeader, people, orgHeader, orgs, seenHeader, seen, saveButtons, saving, saved, openSaved, saveError])
+header = CardHeader("Recursive self-improvement", "From 4 things you saw + web research")
+decision = TagBlock(["Blog post · unique angle"])
+why = TextContent("Nothing on this in your Notion yet, and the people you follow frame it around agent benchmarks rather than the usual AGI takes.", "small")
+summary = TextContent("Researchers are moving from talk to practice: systems that improve their own training code and evals.")
+peopleHeader = InlineHeader("Who's talking about it", "Names and affiliations from the web")
+people = Table([Col("Name", ["Maya Chen", "Rafael Ortiz"]), Col("Affiliation", ["Example University", "Northlake AI"]), Col("Role", ["Assistant Professor", "Co-founder"])])
+orgHeader = InlineHeader("Who's building it")
+orgs = ListBlock([ListItem("Northlake AI", "Startup · agents that rewrite their own tooling", null, "Website", Action([@OpenUrl("https://example.com")]))])
+seenHeader = InlineHeader("What you saw", "From your screen memory")
+seen = ListBlock([ListItem("Self-improving agents are closer than you think", "@mayachen · X · 2h ago")])
+save = Mutation("save_to_notion", {research_id: "res_1a2b3c4d"})
+saveButtons = Buttons([Button("Add to Notion", Action([@Run(save)]), "primary")])
+saving = save.status == "loading" ? Callout("info", "Saving…", "Creating the post and linking people, organizations and sources") : null
+saved = save.status == "success" ? Callout("success", "Added to Notion", save.data.type + " · " + save.data.people + " people · " + save.data.organizations + " organizations linked") : null
+openSaved = save.status == "success" ? Buttons([Button("Open in Notion", Action([@OpenUrl(save.data.url)]), "secondary")]) : null
+saveError = save.status == "error" ? Callout("error", "Couldn't save to Notion", "" + save.error) : null
 ```
 """#
 
@@ -158,7 +184,7 @@ let tools: [ToolDescriptor] = (toolsJSON.arrayValue ?? []).map { t in
 }
 
 var broken: [String] = []
-for (label, example) in [("recall", recallExample), ("plan", planExample), ("booking", bookingExample)] {
+for (label, example) in [("recall", recallExample), ("research", researchExample), ("plan", planExample), ("booking", bookingExample)] {
     for program in example.components(separatedBy: "```openui-lang\n").dropFirst() {
         let code = program.components(separatedBy: "\n```").first ?? program
         let result = library.parser.parse(code)
@@ -176,7 +202,7 @@ guard broken.isEmpty else {
 var options = library.defaultPromptOptions
 options.preamble = preamble
 options.additionalRules += rules
-options.toolExamples = [recallExample, planExample, bookingExample]
+options.toolExamples = [recallExample, researchExample, planExample, bookingExample]
 options.tools = tools
 
 let out = openuiDir.appendingPathComponent("system-prompt.md")

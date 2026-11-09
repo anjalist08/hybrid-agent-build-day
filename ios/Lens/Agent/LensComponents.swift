@@ -57,7 +57,7 @@ struct LensToolProvider: OpenUIToolProvider {
         var request = URLRequest(url: SharedConfig.backendURL.appendingPathComponent("tools/\(name)"))
         request.httpMethod = "POST"
         // Flight searches wait on airlines; bookings can take up to ~2 minutes on Duffel.
-        request.timeoutInterval = name == "book_trip" ? 150 : 45
+        request.timeoutInterval = ["book_trip", "save_to_notion"].contains(name) ? 150 : 45
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(OpenUIJSON.stringify(OpenUIValue.object(arguments).plainJSON).utf8)
         let (data, response) = try await URLSession.shared.data(for: request)

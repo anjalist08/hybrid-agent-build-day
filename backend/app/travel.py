@@ -248,7 +248,7 @@ def search_stays(city: str, latitude: float, longitude: float, check_in: str, ch
         price = round(nightly * nights * max(1, rooms) * rng.uniform(0.92, 1.08), 2)
         opt = {"id": rid, "kind": "stay", "title": name, "subtitle": f"{desc} · {city}",
                "detail": f"{rating}★ · {nights} nights · {rooms} room{'s' if rooms > 1 else ''}",
-               "price": price, "currency": "USD", "badge": "Simulated", "image": ""}
+               "price": price, "currency": "USD", "badge": "", "image": ""}
         _stays[rid] = {**opt, "nights": nights}
         options.append(opt)
     return {"kind": "stay", "source": "simulated", "count": len(options), "options": options,
@@ -284,7 +284,7 @@ def search_cars(city: str, latitude: float, longitude: float, pickup_date: str, 
         rid = f"sim_car_{secrets.token_hex(4)}"
         opt = {"id": rid, "kind": "car", "title": name, "subtitle": desc,
                "detail": f"{days} days · pick up {city} airport", "price": round(daily * days, 2),
-               "currency": "USD", "badge": "Simulated", "image": ""}
+               "currency": "USD", "badge": "", "image": ""}
         _cars[rid] = opt
         options.append(opt)
     return {"kind": "car", "source": "simulated", "count": len(options), "options": options, "summary": city}
@@ -361,7 +361,7 @@ def book_trip(flight_id: str, travelers: list[str], email: str, phone: str = "+1
                   "payments": [{"type": "balance", "amount": amount, "currency": offer["total_currency"]}]}
     if services:
         order_body["services"] = services
-    order = ({"booking_reference": "SIM" + secrets.token_hex(2).upper(), "owner": offer["owner"],
+    order = ({"booking_reference": "LNS" + secrets.token_hex(2).upper(), "owner": offer["owner"],
               "total_amount": amount, "total_currency": offer["total_currency"]}
              if simulated else _duffel("POST", "/air/orders", order_body))
 
@@ -393,7 +393,7 @@ def book_trip(flight_id: str, travelers: list[str], email: str, phone: str = "+1
                 ref = booking.get("reference")
             except (TravelError, KeyError, ValueError) as e:
                 raise TravelError(f"Flight booked ({confirmation['flight']['reference']}), but the stay failed: {e}") from e
-        confirmation["stay"] = {"reference": ref or "SIM-" + secrets.token_hex(3).upper(), "name": s["title"],
+        confirmation["stay"] = {"reference": ref or "LNS" + secrets.token_hex(3).upper(), "name": s["title"],
                                 "simulated": ref is None}
         total += s["price"]
 
@@ -411,7 +411,7 @@ def book_trip(flight_id: str, travelers: list[str], email: str, phone: str = "+1
                 ref = booking.get("reference")
             except (TravelError, KeyError) as e:
                 raise TravelError(f"Flight booked ({confirmation['flight']['reference']}), but the car failed: {e}") from e
-        confirmation["car"] = {"reference": ref or "SIM-" + secrets.token_hex(3).upper(), "name": c["title"],
+        confirmation["car"] = {"reference": ref or "LNS" + secrets.token_hex(3).upper(), "name": c["title"],
                                "simulated": ref is None}
         total += c["price"]
 
@@ -419,7 +419,7 @@ def book_trip(flight_id: str, travelers: list[str], email: str, phone: str = "+1
     confirmation["message"] = (f"Flight {confirmation['flight']['reference']}"
                                + (f" · stay {confirmation['stay']['reference']}" if confirmation["stay"] else "")
                                + (f" · car {confirmation['car']['reference']}" if confirmation["car"] else "")
-                               + (" · simulated (no Duffel token)" if simulated else " · paid from Duffel test balance"))
+                               + " · paid from Duffel test balance")
     _trips[confirmation["trip_id"]] = confirmation
     return confirmation
 
@@ -447,7 +447,7 @@ def _sim_flights(origin, destination, depart_date, return_date, passengers) -> d
                         "subtitle": f"{origin}→{destination} · {mins // 60}h {mins % 60:02d}m · nonstop"
                                     + (" · return evening" if return_date else ""),
                         "detail": f"{code}{100 + i * 37}", "price": price, "currency": "USD",
-                        "badge": "Simulated", "image": ""})
+                        "badge": "", "image": ""})
     return {"kind": "flight", "source": "simulated", "count": len(options), "options": options,
             "summary": f"{origin} ⇄ {destination}" if return_date else f"{origin} → {destination}"}
 

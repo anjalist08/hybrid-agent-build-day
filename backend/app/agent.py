@@ -10,6 +10,7 @@ Wire format to the app: Server-Sent Events, one JSON object per `data:` line —
 Live data and bookings never run here: the generated UI calls them through /tools (Query/Mutation).
 """
 
+import concurrent.futures
 import json
 import logging
 import time
@@ -19,7 +20,7 @@ from pathlib import Path
 
 import anthropic
 
-from . import kb, travel
+from . import kb, notion, research, travel
 from .db import DB
 from .config import settings
 
@@ -50,9 +51,25 @@ MODEL_TOOLS: list[dict] = [
         },
         "eager_input_streaming": True,
     },
+    {
+        "name": "research_topic",
+        "description": "Deep-research a topic ONLY when the user explicitly asks to research it, write about it, or save "
+                       "it to Notion. Combines their screen memory with web search: who is talking about it (real "
+                       "names, academic/company affiliations, profile links), startups and labs working on it, and a "
+                       "drafted blog post (if the angle is unique) or note. Takes about a minute. Returns research_id "
+                       "for the save_to_notion Mutation. Nothing is saved until the user taps Add to Notion.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"topic": {"type": "string", "description": "The topic, e.g. 'recursive self-improvement'"}},
+            "required": ["topic"],
+            "additionalProperties": False,
+        },
+        "eager_input_streaming": True,
+    },
 ]
 
 _db: DB | None = None
+_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
 
 def attach_db(db: DB) -> None:
@@ -81,6 +98,12 @@ def _run_model_tool(name: str, args: object) -> tuple[str, bool]:
         _db.log_route("recall", "local", "knowledge base", 0, True,
                       f"{len(result['items'])} items as text, 0 images")
         return json.dumps(result), False
+    if name == "research_topic" and _db is not None and isinstance(args.get("topic"), str) and args["topic"].strip():
+        try:
+            return json.dumps(research.research_topic(_db, args["topic"].strip())), False
+        except Exception as e:  # noqa: BLE001 - report to the model, which tells the user
+            log.exception("research failed")
+            return f"Research failed: {e}", True
     return f"Unknown tool or bad arguments: {name} {json.dumps(args)[:200]}", True
 
 
@@ -166,7 +189,14 @@ def stream(messages: list[dict], effort: str = "low") -> Iterator[dict]:
         results = []
         for block in tool_uses:
             tools_used.append(block.name)
-            content, is_error = _run_model_tool(block.name, block.input)
+            # Run in a thread and keep the stream alive: research takes ~a minute.
+            future = _pool.submit(_run_model_tool, block.name, block.input)
+            while True:
+                try:
+                    content, is_error = future.result(timeout=3)
+                    break
+                except concurrent.futures.TimeoutError:
+                    yield {"type": "status", "status": "tool", "tool": block.name}
             results.append({"type": "tool_result", "tool_use_id": block.id, "content": content, "is_error": is_error})
         conversation.append({"role": "user", "content": results})
 
@@ -175,6 +205,11 @@ def stream(messages: list[dict], effort: str = "low") -> Iterator[dict]:
 
 def run_ui_tool(name: str, args: dict) -> dict:
     """Tools the generated UI calls through Query()/Mutation() (via POST /tools/{name})."""
+    if name == "save_to_notion":
+        try:
+            return research.save_to_notion(str(args.get("research_id", "")))
+        except notion.NotionError as e:
+            raise travel.TravelError(str(e)) from e
     if name == "notify_friends":
         # Normally handled on the phone (opens Messages); this is the fallback for other clients.
         return {"status": "ok", "message": args.get("message", "")}
