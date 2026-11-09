@@ -22,6 +22,12 @@ and the app renders natively in SwiftUI.
 |---|---|---|---|
 | <img src="docs/screenshots/lens-seatmap.png" width="200"> | <img src="docs/screenshots/lens-research.png" width="200"> | <img src="docs/screenshots/lens-permission.png" width="200"> | <img src="docs/screenshots/lens-settings.png" width="200"> |
 
+## Demo video
+
+[![Watch the Lens demo on YouTube](https://img.youtube.com/vi/3I2nyuTXmaM/hqdefault.jpg)](https://youtu.be/3I2nyuTXmaM)
+
+▶️ [Watch the demo on YouTube](https://youtu.be/3I2nyuTXmaM)
+
 ## What Lens does
 
 **1. Screen memory.** Turn on **Settings → Screen memory** and iOS starts a screen broadcast
