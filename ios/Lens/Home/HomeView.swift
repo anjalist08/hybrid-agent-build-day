@@ -95,6 +95,11 @@ struct HomeView: View {
             if ProcessInfo.processInfo.arguments.contains("--preview-trip") {
                 path = [.chat(title: "Tahoe trip", seed: DemoContent.skiSquad)]
             }
+            // `--preview-ask "<question>"` opens Ask with that question already sent.
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "--preview-ask"), i + 1 < args.count {
+                path = [.chat(title: nil, seed: args[i + 1])]
+            }
             if ProcessInfo.processInfo.arguments.contains("--preview-settings") { showSettings = true }
             if ProcessInfo.processInfo.arguments.contains("--preview-seatmap") { showSeatMapPreview = true }
             if ProcessInfo.processInfo.arguments.contains("--preview-permission") { showPermission = suggestions[0] }
