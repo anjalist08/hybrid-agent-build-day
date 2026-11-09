@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import threading
+import time
 from datetime import date
 
 import httpx
@@ -41,9 +42,13 @@ def _token() -> str:
 
 
 def _call(method: str, path: str, body: dict | None = None) -> dict:
-    r = httpx.request(method, f"{API}{path}", json=body, timeout=30,
-                      headers={"Authorization": f"Bearer {_token()}", "Notion-Version": VERSION,
-                               "Content-Type": "application/json"})
+    for attempt in range(4):
+        r = httpx.request(method, f"{API}{path}", json=body, timeout=30,
+                          headers={"Authorization": f"Bearer {_token()}", "Notion-Version": VERSION,
+                                   "Content-Type": "application/json"})
+        if r.status_code != 429:
+            break
+        time.sleep(float(r.headers.get("Retry-After", 1 + attempt)))  # Notion allows ~3 requests/s
     if r.status_code >= 400:
         raise NotionError(f"Notion {method} {path}: {r.status_code} {r.json().get('message', r.text)[:300]}")
     return r.json()
@@ -198,7 +203,8 @@ def existing_writing_titles(limit: int = 50) -> list[str]:
 # ---------------------------------------------------------------- page body
 
 
-def _blocks(research: dict, person_pages: dict[str, str], org_pages: dict[str, str]) -> list[dict]:
+def _blocks(research: dict, person_pages: dict[str, str], org_pages: dict[str, str],
+            topic_id: str = "", source_pages: dict[str, str] | None = None) -> list[dict]:
     def para(text: str) -> dict:
         return {"type": "paragraph", "paragraph": {"rich_text": _text(text)}}
 
@@ -210,7 +216,10 @@ def _blocks(research: dict, person_pages: dict[str, str], org_pages: dict[str, s
         rich = [{"type": "mention", "mention": {"page": {"id": page_id}}}] if page_id else _text(label)
         return {"type": "bulleted_list_item", "bulleted_list_item": {"rich_text": rich + _text(" — " + rest if rest else "")}}
 
-    blocks = [{"type": "callout", "callout": {"rich_text": _text(research["summary"]), "icon": {"emoji": "🔭"}}}]
+    blocks = []
+    if topic_id:
+        blocks.append({"type": "paragraph", "paragraph": {"rich_text": _text("Topic: ") + [_mention(topic_id)]}})
+    blocks.append({"type": "callout", "callout": {"rich_text": _text(research["summary"]), "icon": {"emoji": "🔭"}}})
     if research.get("key_takeaways"):
         blocks.append(heading("Key takeaways"))
         blocks += [{"type": "bulleted_list_item", "bulleted_list_item": {"rich_text": _text(t)}}
@@ -227,6 +236,9 @@ def _blocks(research: dict, person_pages: dict[str, str], org_pages: dict[str, s
         blocks.append(heading("Who's building it"))
         blocks += [mention_line(org_pages.get(o["name"], ""), o["name"], o.get("what_they_do", ""))
                    for o in research["organizations"]]
+    if source_pages:
+        blocks.append(heading("Sources"))
+        blocks += [mention_line(pid, title, "") for title, pid in source_pages.items()]
     blocks.append({"type": "divider", "divider": {}})
     blocks.append(para("Drafted by Lens from your screen memory and web research. Edit freely."))
     return blocks[:95]  # Notion accepts up to 100 children per request
@@ -270,7 +282,8 @@ def save_research(research: dict) -> dict:
         person_pages[p["name"]] = _upsert(dbs["people"], p["name"], props,
                                           merge_relations=("Topics", "Organizations"))
 
-    source_pages: list[str] = []
+    source_pages: dict[str, str] = {}
+    source_authors: dict[str, list[str]] = {}
     for s in research.get("sources", []):
         props = {"Topics": _rel([topic_id])}
         if s.get("url"):
@@ -279,7 +292,10 @@ def save_research(research: dict) -> dict:
             props["App"] = {"select": {"name": s["app"]}}
         if s.get("author") in person_pages:
             props["Author"] = _rel([person_pages[s["author"]]])
-        source_pages.append(_upsert(dbs["sources"], s["title"][:180], props, merge_relations=("Topics",)))
+        sid = _upsert(dbs["sources"], s["title"][:180], props, merge_relations=("Topics",))
+        source_pages[s["title"][:180]] = sid
+        if s.get("author") in person_pages:
+            source_authors[sid] = [person_pages[s["author"]]]
 
     kind = "Blog post" if research.get("decision") == "blog_post" else "Note"
     page = _call("POST", "/pages", {
@@ -293,10 +309,90 @@ def save_research(research: dict) -> dict:
             "Topic": _rel([topic_id]),
             "People": _rel(list(person_pages.values())),
             "Organizations": _rel(list(org_pages.values())),
-            "Sources": _rel(source_pages),
+            "Sources": _rel(list(source_pages.values())),
         },
-        "children": _blocks(research, person_pages, org_pages),
+        "children": _blocks(research, person_pages, org_pages, topic_id, source_pages),
     })
+    person_orgs = {person_pages[p["name"]]: [org_pages[o] for o in org_pages
+                                             if o.lower() in (p.get("affiliation") or "").lower()]
+                   for p in research.get("people", []) if p["name"] in person_pages}
+    connect_graph(state["hub"], topic_id, [page["id"]], list(person_pages.values()), list(org_pages.values()),
+                  list(source_pages.values()), person_orgs, source_authors)
     hub_url = f"https://www.notion.so/{state['hub'].replace('-', '')}"
     return {"url": page.get("url", hub_url), "type": kind, "title": research["title"], "hub_url": hub_url,
             "people": len(person_pages), "organizations": len(org_pages), "sources": len(source_pages)}
+
+
+# ---------------------------------------------------------------- knowledge-graph mentions
+
+
+def _mention(page_id: str) -> dict:
+    return {"type": "mention", "mention": {"page": {"id": page_id}}}
+
+
+def _mentioned_ids(page_id: str) -> set[str]:
+    """Pages already @mentioned in a page's body (so re-runs don't repeat lines)."""
+    found: set[str] = set()
+    cursor = None
+    for _ in range(5):
+        res = _call("GET", f"/blocks/{page_id}/children?page_size=100" + (f"&start_cursor={cursor}" if cursor else ""))
+        for block in res.get("results", []):
+            for rt in block.get(block.get("type", ""), {}).get("rich_text", []) or []:
+                if rt.get("type") == "mention" and rt["mention"].get("type") == "page":
+                    found.add(rt["mention"]["page"]["id"].replace("-", ""))
+        if not res.get("has_more"):
+            break
+        cursor = res.get("next_cursor")
+    return found
+
+
+def _link(page_id: str, lines: list[tuple[str, list[str]]]) -> None:
+    """Append "Label: @A, @B" lines to a page, skipping pages it already mentions."""
+    already = _mentioned_ids(page_id)
+    blocks = []
+    for label, targets in lines:
+        new = [t for t in dict.fromkeys(targets) if t and t.replace("-", "") not in already
+               and t.replace("-", "") != page_id.replace("-", "")]
+        if not new:
+            continue
+        rich = _text(f"{label}: ")
+        for i, t in enumerate(new[:40]):
+            rich += ([] if i == 0 else _text(", ")) + [_mention(t)]
+            already.add(t.replace("-", ""))
+        blocks.append({"type": "paragraph", "paragraph": {"rich_text": rich}})
+    if blocks:
+        _call("PATCH", f"/blocks/{page_id}/children", {"children": blocks})
+
+
+def connect_graph(hub: str, topic: str, writing: list[str], people: list[str], orgs: list[str], sources: list[str],
+                  person_orgs: dict[str, list[str]], source_authors: dict[str, list[str]]) -> None:
+    """@mentions in every page body, so mention-based graph views (e.g. Graphify) see one connected graph:
+    hub → topics → posts/people/orgs/sources, people ↔ orgs, sources → authors."""
+    _link(hub, [("Topics", [topic])])
+    _link(topic, [("Writing", writing), ("People", people), ("Organizations", orgs), ("Sources", sources)])
+    for pid in people:
+        _link(pid, [("Talks about", [topic]), ("Works at", person_orgs.get(pid, [])),
+                    ("Shared", [s for s, authors in source_authors.items() if pid in authors]),
+                    ("Featured in", writing)])
+    for oid in orgs:
+        _link(oid, [("Working on", [topic]), ("People", [p for p, os in person_orgs.items() if oid in os]),
+                    ("Featured in", writing)])
+    for sid in sources:
+        _link(sid, [("About", [topic]), ("By", source_authors.get(sid, [])), ("Cited in", writing)])
+
+
+def backfill_mentions() -> int:
+    """Add the graph mentions to everything already saved (reads the database relations)."""
+    state = ensure_workspace()
+    dbs = state["databases"]
+    rel = lambda page, prop: [r["id"] for r in page["properties"].get(prop, {}).get("relation", [])]  # noqa: E731
+    posts = _call("POST", f"/databases/{dbs['writing']}/query", {"page_size": 100}).get("results", [])
+    for post in posts:
+        people, orgs, sources = rel(post, "People"), rel(post, "Organizations"), rel(post, "Sources")
+        person_orgs = {pid: rel(_call("GET", f"/pages/{pid}"), "Organizations") for pid in people}
+        source_authors = {sid: rel(_call("GET", f"/pages/{sid}"), "Author") for sid in sources}
+        for topic in rel(post, "Topic") or [""]:
+            if topic:
+                _link(post["id"], [("Topic", [topic]), ("Sources", sources)])
+                connect_graph(state["hub"], topic, [post["id"]], people, orgs, sources, person_orgs, source_authors)
+    return len(posts)
