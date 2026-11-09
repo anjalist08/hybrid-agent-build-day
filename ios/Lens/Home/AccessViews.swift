@@ -43,6 +43,7 @@ struct AppAccessView: View {
     @State private var backendURL = SharedConfig.backendURL.absoluteString
     @State private var showRoutes = false
     @State private var showClassic = false
+    @StateObject private var capture = ScreenCaptureController()
 
     var body: some View {
         ScrollView {
@@ -53,21 +54,26 @@ struct AppAccessView: View {
 
                 VStack(spacing: 0) {
                     ForEach(AccessSettings.Source.allCases) { source in
-                        Toggle(isOn: binding(source)) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(source.title).font(.body).foregroundStyle(LensDesign.ink)
-                                Text(source.detail).font(.footnote).foregroundStyle(LensDesign.muted)
+                        if source == .screen {
+                            // The real switch: starts/stops the Lens Capture broadcast.
+                            ScreenCaptureRow(controller: capture)
+                        } else {
+                            Toggle(isOn: binding(source)) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(source.title).font(.body).foregroundStyle(LensDesign.ink)
+                                    Text(source.detail).font(.footnote).foregroundStyle(LensDesign.muted)
+                                }
                             }
+                            .tint(LensDesign.blue)
+                            .padding(.vertical, 12)
                         }
-                        .tint(LensDesign.blue)
-                        .padding(.vertical, 12)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
                 .background(LensDesign.surface, in: RoundedRectangle(cornerRadius: LensDesign.bubbleRadius, style: .continuous))
 
-                Text("All sources start off. Screenshots and chats are read on your devices; only the details a task needs go online.")
+                Text("All sources start off. Screen memory uses iOS screen broadcast — stop it anytime from the red status pill. Screenshots and chats are read on your devices; only the details a task needs go online.")
                     .font(.footnote).foregroundStyle(LensDesign.muted).padding(.top, 8)
 
                 Button("Turn off all access") {
@@ -84,8 +90,12 @@ struct AppAccessView: View {
         .background(Color.white)
         .onAppear {
             for source in AccessSettings.Source.allCases { values[source] = AccessSettings.isOn(source) }
+            capture.startPolling()
         }
-        .onDisappear(perform: save)
+        .onDisappear {
+            save()
+            capture.stopPolling()
+        }
         .sheet(isPresented: $showRoutes) { RoutingView() }
         .sheet(isPresented: $showClassic) { AssistantChatView() }
     }

@@ -41,6 +41,7 @@ struct HomeView: View {
     @State private var showPermission: Suggestion?
     @State private var showMemory = false
     @State private var showSeatMapPreview = false
+    @StateObject private var capture = ScreenCaptureController()
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -91,6 +92,8 @@ struct HomeView: View {
             )
         }
         .task { await loadMemoryLine() }
+        .onAppear { capture.startPolling() }
+        .background(ScreenCaptureHost(controller: capture).frame(width: 1, height: 1), alignment: .topLeading)
         #if DEBUG
         .task {
             // Simulator screenshots: `--preview-trip` opens the trip chat as if "Take a look" was tapped.
@@ -154,19 +157,15 @@ struct HomeView: View {
             Suggestion(id: "memory", category: "From your screen", time: "today",
                        text: memoryLine ?? "Lens remembers what you read and watch — on this device. Ask what you saw earlier.",
                        action: "Ask about it", kind: .ask(question: "What have I been watching and reading today?")),
-            Suggestion(id: "capture", category: "Screen memory", time: captureTime,
-                       text: SharedConfig.defaults.bool(forKey: SharedConfig.Keys.broadcasting)
-                           ? "Capturing what you browse. Screenshots are read on your Mac and never uploaded."
+            Suggestion(id: "capture", category: "Screen memory", time: capture.isCapturing ? "on" : "off",
+                       text: capture.isCapturing
+                           ? "Capturing what you browse — \(capture.framesSent) screens so far. Screenshots are read on your Mac."
                            : "Turn on screen memory so Lens can recall what you saw on X, YouTube and the web.",
-                       action: "Start capture", kind: .capture),
+                       action: capture.isCapturing ? "Stop capture" : "Start capture", kind: .capture),
         ]
     }
 
     private var visibleSuggestions: [Suggestion] { suggestions.filter { !dismissed.contains($0.id) } }
-
-    private var captureTime: String {
-        SharedConfig.defaults.bool(forKey: SharedConfig.Keys.broadcasting) ? "on" : "off"
-    }
 
     private func act(on item: Suggestion) {
         switch item.kind {
@@ -175,7 +174,7 @@ struct HomeView: View {
         case .ask:
             showMemory = true
         case .capture:
-            break // handled by the broadcast picker inside the row
+            capture.toggle()
         }
     }
 
@@ -225,15 +224,7 @@ private struct SuggestionRow: View {
             }
             Text(item.text).font(.body).foregroundStyle(LensDesign.ink).fixedSize(horizontal: false, vertical: true)
             HStack {
-                if item.kind == .capture {
-                    // ReplayKit only starts from its own system button; overlay it on the link.
-                    ZStack(alignment: .leading) {
-                        Text(item.action).font(.subheadline).foregroundStyle(LensDesign.blue)
-                        BroadcastPickerButton().frame(width: 110, height: 30).opacity(0.011)
-                    }
-                } else {
-                    Button(item.action, action: onAction).font(.subheadline).foregroundStyle(LensDesign.blue)
-                }
+                Button(item.action, action: onAction).font(.subheadline).foregroundStyle(LensDesign.blue)
                 Spacer()
                 if item.kind != .capture {
                     Button("Not now", action: onDismiss).font(.subheadline).foregroundStyle(LensDesign.muted)
