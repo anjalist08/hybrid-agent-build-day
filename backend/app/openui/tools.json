@@ -1,0 +1,562 @@
+[
+  {
+    "name": "search_flights",
+    "description": "Live flight offers from Duffel (round trip when return_date is given). Pass the whole result to OfferPicker. Use IATA airport or city codes.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "depart_date": {
+          "type": "string",
+          "description": "YYYY-MM-DD"
+        },
+        "return_date": {
+          "type": "string",
+          "description": "YYYY-MM-DD, optional"
+        },
+        "passengers": {
+          "type": "number"
+        },
+        "cabin_class": {
+          "type": "string",
+          "enum": [
+            "economy",
+            "premium_economy",
+            "business",
+            "first"
+          ]
+        }
+      },
+      "required": [
+        "origin",
+        "destination",
+        "depart_date",
+        "passengers"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "duffel",
+            "simulated"
+          ]
+        },
+        "count": {
+          "type": "number"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "subtitle": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "badge": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "subtitle",
+              "detail",
+              "price",
+              "currency",
+              "badge",
+              "image"
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "get_seat_map",
+    "description": "Seat map of the first outbound flight of an offer. Pass the whole result to CabinSeatMap. available=false when the airline has no seat selection.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "offer_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "offer_id"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "offer_id": {
+          "type": "string"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "aisles": {
+          "type": "number"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "currency": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "search_stays",
+    "description": "Hotels near a point for the trip dates. Pass the whole result to OfferPicker. You must supply latitude/longitude of the destination city.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        },
+        "check_in": {
+          "type": "string",
+          "description": "YYYY-MM-DD"
+        },
+        "check_out": {
+          "type": "string",
+          "description": "YYYY-MM-DD"
+        },
+        "guests": {
+          "type": "number"
+        },
+        "rooms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "city",
+        "latitude",
+        "longitude",
+        "check_in",
+        "check_out",
+        "guests"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "duffel",
+            "simulated"
+          ]
+        },
+        "count": {
+          "type": "number"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "subtitle": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "badge": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "subtitle",
+              "detail",
+              "price",
+              "currency",
+              "badge",
+              "image"
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "search_cars",
+    "description": "Rental cars at the destination for the trip dates. Pass the whole result to OfferPicker.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        },
+        "pickup_date": {
+          "type": "string"
+        },
+        "dropoff_date": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "city",
+        "latitude",
+        "longitude",
+        "pickup_date",
+        "dropoff_date"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "duffel",
+            "simulated"
+          ]
+        },
+        "count": {
+          "type": "number"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "subtitle": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "badge": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "subtitle",
+              "detail",
+              "price",
+              "currency",
+              "badge",
+              "image"
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "price_trip",
+    "description": "Running total for the current choices. Re-runs automatically when its $binding args change.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "flight_id": {
+          "type": "string"
+        },
+        "stay_id": {
+          "type": "string"
+        },
+        "car_id": {
+          "type": "string"
+        },
+        "seats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": []
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "left": {
+                "type": "string"
+              },
+              "right": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "left",
+              "right"
+            ]
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "book_trip",
+    "description": "Pay and book everything chosen: the flight (with seats) as a Duffel order paid from the test balance, then the stay and the car. Write operation — use with Mutation().",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "flight_id": {
+          "type": "string"
+        },
+        "travelers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "full names, lead traveler first"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "stay_id": {
+          "type": "string"
+        },
+        "car_id": {
+          "type": "string"
+        },
+        "seats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "flight_id",
+        "travelers",
+        "email"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "trip_id": {
+          "type": "string"
+        },
+        "total": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "flight": {
+          "type": "object",
+          "properties": {
+            "reference": {
+              "type": "string"
+            },
+            "airline": {
+              "type": "string"
+            },
+            "amount": {
+              "type": "string"
+            }
+          }
+        },
+        "stay": {
+          "type": "object",
+          "properties": {
+            "reference": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "car": {
+          "type": "object",
+          "properties": {
+            "reference": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "notify_friends",
+    "description": "Opens Messages on the phone with the itinerary pre-filled for the friends. Write operation — use with Mutation().",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "friends": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "friends",
+        "message"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+]

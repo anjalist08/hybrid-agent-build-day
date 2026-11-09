@@ -1,0 +1,6 @@
+// Copy to Local.xcconfig and fill in. Local.xcconfig is gitignored.
+// BUNDLE_PREFIX must be unique to your Apple account (the App Group is derived from it).
+BUNDLE_PREFIX = com.yourname
+DEVELOPMENT_TEAM = ABCDE12345
+// Your laptop's LAN or Tailscale IP. Can also be changed at runtime in the app's Settings.
+LENS_BACKEND_URL = http:/$()/100.64.0.2:8000
