@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var showRoutes = false
     @State private var showTickets = false
     @State private var showAgent = false
+    @State private var showSeatMapPreview = false
 
     var body: some View {
         NavigationStack {
@@ -34,6 +35,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showAssistant) { AssistantChatView() }
             .fullScreenCover(isPresented: $showAgent) { AgentChatView() }
+            #if DEBUG
+            .sheet(isPresented: $showSeatMapPreview) { SeatMapPreview() }
+            #endif
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showRoutes) { RoutingView() }
             .sheet(isPresented: $showTickets, onDismiss: {
@@ -51,6 +55,7 @@ struct ContentView: View {
             showConcert = arguments.contains("--preview-concert")
             showTickets = arguments.contains("--preview-tickets")
             showAgent = arguments.contains("--preview-agent")
+            showSeatMapPreview = arguments.contains("--preview-seatmap")
         }
         #endif
     }

@@ -218,7 +218,13 @@ struct CabinSeatMapView: View {
     let maxSeats: Int
     let onChange: ([String]) -> Void
 
-    private let seatSize: CGFloat = 26
+    /// Fit the widest row (wide-body cabins have ~10 seats and two aisles) into the card.
+    private var seatSize: CGFloat {
+        let widest = map.rows.map { row in row.sections.reduce(0) { $0 + $1.count } }.max() ?? 6
+        let aisles = CGFloat(max(0, (map.rows.first?.sections.count ?? 1) - 1))
+        let available: CGFloat = 300 - aisles * 22
+        return max(18, min(28, available / CGFloat(max(widest, 1)) - 4))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -227,7 +233,8 @@ struct CabinSeatMapView: View {
                     .font(.subheadline).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
             } else {
-                header
+                Text("Front of plane").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
                 ScrollView(.vertical) {
                     VStack(spacing: 6) {
                         ForEach(map.rows) { row in
@@ -252,20 +259,11 @@ struct CabinSeatMapView: View {
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private var header: some View {
-        HStack(spacing: 4) {
-            ForEach(map.columns, id: \.self) { col in
-                Text(col).font(.caption2.weight(.bold)).foregroundStyle(.secondary).frame(width: seatSize)
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     private func rowView(_ row: CabinMap.Row) -> some View {
         HStack(spacing: 4) {
             ForEach(Array(row.sections.enumerated()), id: \.offset) { index, section in
                 if index > 0 {
-                    Text(row.id).font(.caption2).foregroundStyle(.tertiary).frame(width: 20)
+                    Text(row.id).font(.system(size: 9)).foregroundStyle(.tertiary).frame(width: 18)
                 }
                 ForEach(Array(section.enumerated()), id: \.offset) { _, cell in
                     seat(cell)
@@ -286,9 +284,12 @@ struct CabinSeatMapView: View {
                               ? (cell.price > 0 ? Color.orange.opacity(0.25) : Color.accentColor.opacity(0.18))
                               : Color(.systemGray5))
                     if isSelected {
-                        Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(.white)
-                    } else if !cell.available {
-                        Image(systemName: "xmark").font(.system(size: 8)).foregroundStyle(Color(.systemGray3))
+                        Image(systemName: "checkmark").font(.system(size: seatSize * 0.4, weight: .bold)).foregroundStyle(.white)
+                    } else if cell.available {
+                        Text(id.trimmingCharacters(in: .decimalDigits))
+                            .font(.system(size: seatSize * 0.38, weight: .medium)).foregroundStyle(.secondary)
+                    } else {
+                        Image(systemName: "xmark").font(.system(size: seatSize * 0.3)).foregroundStyle(Color(.systemGray3))
                     }
                 }
                 .frame(width: seatSize, height: seatSize)

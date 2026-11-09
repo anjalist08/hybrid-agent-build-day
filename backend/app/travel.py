@@ -181,10 +181,12 @@ def get_seat_map(offer_id: str) -> dict:
                 else:
                     cells.append({"type": el.get("type", "empty")})
             sections.append(cells)
+        if not any(c.get("type") == "seat" for sec in sections for c in sec):
+            continue  # bassinet/galley-only rows
         rows.append({"label": re.sub(r"\D", "", next((c["id"] for s in sections for c in s if c.get("id")), "")),
                      "sections": sections})
     _seat_services[offer_id] = services
-    return {"offer_id": offer_id, "available": True, "aisles": cabin.get("aisles", 1), "columns": columns,
+    return {"offer_id": offer_id, "available": True, "aisles": cabin.get("aisles", 1), "columns": sorted(columns),
             "rows": rows, "currency": _offers[offer_id]["total_currency"],
             "message": "Tap a seat for each traveler."}
 
