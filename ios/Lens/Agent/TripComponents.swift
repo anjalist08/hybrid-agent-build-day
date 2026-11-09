@@ -26,7 +26,7 @@ struct OfferPickerComponent: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
                 .padding(.horizontal, 12)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+                .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             } else {
                 ForEach(options) { option in
                     OfferRow(option: option, isSelected: option.id == selected) {
@@ -35,8 +35,8 @@ struct OfferPickerComponent: View {
                     }
                 }
                 if source == "duffel" {
-                    Label("Live from Duffel (test mode)", systemImage: "bolt.horizontal.circle")
-                        .font(.caption2).foregroundStyle(.secondary)
+                    Text("Live from Duffel · only trip details are shared")
+                        .font(.caption).foregroundStyle(LensDesign.muted)
                 }
             }
         }
@@ -97,8 +97,11 @@ private struct OfferRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(alignment: .top, spacing: 12) {
-                thumbnail
+            HStack(alignment: .center, spacing: 12) {
+                // Radio first, like the design's "Choose your flight" rows.
+                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? LensDesign.ink : Color(.systemGray3))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(option.title).font(.subheadline.weight(.semibold)).lineLimit(2)
                     Text(option.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -108,26 +111,19 @@ private struct OfferRow: View {
                             Text(option.badge)
                                 .font(.caption2.weight(.semibold))
                                 .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.12), in: Capsule())
+                                .background(LensDesign.surface, in: Capsule())
                         }
                     }
                 }
                 Spacer(minLength: 4)
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(option.priceText).font(.headline)
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.title3)
-                        .foregroundStyle(isSelected ? Color.accentColor : Color(.tertiaryLabel))
-                }
+                Text(option.priceText).font(.body.weight(.medium)).foregroundStyle(LensDesign.ink)
             }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected ? Color.accentColor.opacity(0.08) : Color(.secondarySystemBackground))
-            )
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? LensDesign.ink : LensDesign.hairline, lineWidth: isSelected ? 1.5 : 1)
             )
             .contentShape(Rectangle())
         }
@@ -245,18 +241,15 @@ struct CabinSeatMapView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .frame(maxHeight: 300)
-                .background(
-                    // A fuselage outline behind the cabin.
-                    RoundedRectangle(cornerRadius: 40).fill(Color(.systemBackground))
-                )
+                .background(RoundedRectangle(cornerRadius: 40).stroke(LensDesign.hairline))
                 legend
                 Text(selected.isEmpty ? "Tap \(maxSeats) seat\(maxSeats == 1 ? "" : "s")"
                      : "Selected: \(selected.joined(separator: ", "))")
                     .font(.footnote.weight(.medium))
             }
         }
-        .padding(12)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .padding(14)
+        .background(.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func rowView(_ row: CabinMap.Row) -> some View {

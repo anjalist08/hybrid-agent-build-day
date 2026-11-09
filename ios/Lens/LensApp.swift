@@ -5,7 +5,7 @@ import SwiftUI
 struct LensApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            HomeView()
         }
     }
 }

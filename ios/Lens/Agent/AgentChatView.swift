@@ -26,14 +26,45 @@ final class AgentTurn: Identifiable {
         self.content = content
         self.runtime = runtime
     }
+
+    /// A pasted group chat or email (several lines) is shown as a shared-conversation card.
+    var isSharedConversation: Bool { role == .user && display.split(separator: "\n").count >= 3 }
+}
+
+extension Notification.Name {
+    /// Posted by LensToolProvider when the generated UI runs a tool (object: tool name).
+    static let lensToolCalled = Notification.Name("lensToolCalled")
 }
 
 @MainActor
 @Observable
 final class AgentStore {
+    static let steps = ["Plan", "Flights & stays", "Book", "Share"]
+
     var turns: [AgentTurn] = []
     var isBusy = false
+    /// Index into `steps`, advanced by what the user does in the generated UI.
+    var step = 0
     private var task: Task<Void, Never>?
+    @ObservationIgnored private var observer: NSObjectProtocol?
+
+    init() {
+        observer = NotificationCenter.default.addObserver(forName: .lensToolCalled, object: nil, queue: .main) { [weak self] note in
+            let tool = note.object as? String ?? ""
+            MainActor.assumeIsolated { self?.advance(for: tool) }
+        }
+    }
+
+    private func advance(for tool: String) {
+        let target: Int
+        switch tool {
+        case "search_flights", "search_stays", "search_cars": target = 1
+        case "book_trip": target = 2
+        case "notify_friends": target = 3
+        default: return
+        }
+        step = max(step, target)
+    }
 
     func send(display: String, content: String? = nil) {
         let text = display.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -51,7 +82,7 @@ final class AgentStore {
 
         isBusy = true
         reply.isStreaming = true
-        reply.status = "Reading the conversation…"
+        reply.status = turns.count <= 2 ? "Reading the chat on this device…" : "Working on it…"
         task = Task { [weak self] in
             await self?.stream(history: Array(history), into: reply)
         }
@@ -61,6 +92,7 @@ final class AgentStore {
         task?.cancel()
         turns.removeAll()
         isBusy = false
+        step = 0
     }
 
     private func handle(_ event: ActionEvent) {
@@ -85,7 +117,7 @@ final class AgentStore {
         do {
             let (bytes, response) = try await URLSession.shared.bytes(for: request)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                reply.error = "Backend error \(http.statusCode)"
+                reply.error = "Lens server error \(http.statusCode)"
                 return
             }
             for try await line in bytes.lines where line.hasPrefix("data: ") {
@@ -95,9 +127,9 @@ final class AgentStore {
                 switch type {
                 case "status":
                     switch event["status"] as? String {
-                    case "thinking": reply.status = "Thinking…"
+                    case "thinking": reply.status = "Thinking it through…"
                     case "tool": reply.status = "Looking things up…"
-                    default: reply.status = "Putting your trip together…"
+                    default: reply.status = "Putting it together…"
                     }
                 case "delta":
                     reply.program += event["text"] as? String ?? ""
@@ -118,141 +150,89 @@ final class AgentStore {
     }
 }
 
+/// Chat with the agent: "‹ Home · Title", step tracker, bubbles and OpenUI cards, composer.
 struct AgentChatView: View {
-    @Environment(\.dismiss) private var dismiss
+    let title: String?
+    /// A shared conversation to start from (sent once, when the user opened it from Home).
+    let seed: String?
+    let onHome: () -> Void
+
     @State private var store = AgentStore()
     @State private var draft = ""
-    @FocusState private var inputFocused: Bool
-
-    /// Demo inputs: trips friends plan ad hoc over group chats and email.
-    private let samples = [
-        """
-        Group chat "Ski squad ⛷️"
-        Alex: ok we're actually doing Tahoe this time 😤
-        Sam: MLK weekend? I can do Fri Jan 15 – Mon Jan 18
-        Alex: yes!! Palisades. I want a place near the lifts
-        Sam: we'll need a car from Reno, I'm not driving 4 hrs from SF
-        Alex: someone book it before we chicken out 😂
-        """,
-        """
-        Email from Priya — Subject: Austin for my birthday?!
-        Hey! Thinking Austin Mar 5–8 for my 30th. Me, you and Jordan flying from SF.         Somewhere walkable near South Congress, and a car for a day trip to Hill Country wineries. You in?
-        """,
-    ]
+    @State private var seeded = false
 
     var body: some View {
-        NavigationStack {
+        VStack(alignment: .leading, spacing: 0) {
+            header
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
-                        if store.turns.isEmpty { emptyState }
+                        AssistantBubble { Text(title == nil ? "What can I help you with today?" : "I'll read the chat here on your phone and pull out the plan.") }
                         ForEach(store.turns) { turn in
                             TurnView(turn: turn).id(turn.id)
                         }
                         Color.clear.frame(height: 1).id("bottom")
                     }
-                    .padding()
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 20)
                 }
-                #if DEBUG
-                .task {
-                    // Simulator screenshots: `--agent-scroll <fraction>` scrolls down after the answer streams.
-                    let args = ProcessInfo.processInfo.arguments
-                    if let i = args.firstIndex(of: "--agent-scroll"), i + 1 < args.count, let y = Double(args[i + 1]) {
-                        try? await Task.sleep(for: .seconds(22))
-                        withAnimation { proxy.scrollTo(store.turns.last?.id, anchor: UnitPoint(x: 0.5, y: y)) }
-                    }
-                }
-                #endif
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: store.turns.count) {
                     if let last = store.turns.last { withAnimation { proxy.scrollTo(last.id, anchor: .top) } }
                 }
+                #if DEBUG
+                .task { await debugScroll(proxy) }
+                #endif
             }
-            .safeAreaInset(edge: .bottom) { inputBar }
+            Composer(text: $draft, disabled: store.isBusy) {
+                let text = draft
+                draft = ""
+                store.send(display: text)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 8)
+        }
+        .background(Color.white)
+        .environment(\.openUITheme, LensDesign.openUITheme)
+        .task {
+            guard !seeded else { return }
+            seeded = true
+            if let seed { store.send(display: seed) }
             #if DEBUG
-            .task {
-                // Simulator screenshots: `--agent-autosend` sends the first sample message.
-                let args = ProcessInfo.processInfo.arguments
-                if args.contains("--agent-autosend"), store.turns.isEmpty {
-                    store.send(display: samples[0])
-                    // `--agent-autoconfirm` also taps "Looks good" once the plan has streamed.
-                    if args.contains("--agent-autoconfirm") {
-                        try? await Task.sleep(for: .seconds(2))
-                        while store.isBusy { try? await Task.sleep(for: .milliseconds(300)) }
-                        store.send(display: "Looks good — find flights, stays & cars",
-                                   content: "Confirm the plan and find options")
-                    }
-                }
-            }
+            await debugAutoconfirm()
             #endif
-            .navigationTitle("Lens Agent")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { store.reset() } label: { Image(systemName: "square.and.pencil") }
-                        .accessibilityLabel("New chat")
-                }
-            }
         }
     }
 
-    private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Planning a trip with friends?").font(.title2.bold())
-            Text("Paste the group chat or email. Lens pieces together the plan, then books flights with seats, a stay and a car — and lets your friends know.")
-                .foregroundStyle(.secondary)
-            ForEach(samples, id: \.self) { sample in
-                Button { store.send(display: sample) } label: {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: sample.hasPrefix("Email") ? "envelope.fill" : "message.fill")
-                            .foregroundStyle(sample.hasPrefix("Email") ? .blue : .green)
-                        Text(sample).font(.subheadline).multilineTextAlignment(.leading).foregroundStyle(.primary)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(12)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
-                }
-                .buttonStyle(.plain)
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Breadcrumb(title: title, onBack: onHome)
+            if title != nil || !store.turns.isEmpty {
+                StepTracker(steps: AgentStore.steps, current: store.step)
             }
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
-    private var inputBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                if let text = UIPasteboard.general.string { store.send(display: text) }
-            } label: {
-                Image(systemName: "doc.on.clipboard").font(.title3)
-            }
-            .accessibilityLabel("Paste from clipboard")
-            .disabled(store.isBusy)
-
-            TextField("Paste a group chat or email…", text: $draft, axis: .vertical)
-                .lineLimit(1...4)
-                .textFieldStyle(.roundedBorder)
-                .focused($inputFocused)
-                .submitLabel(.send)
-                .onSubmit(sendDraft)
-
-            Button(action: sendDraft) {
-                Image(systemName: "arrow.up.circle.fill").font(.title)
-            }
-            .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || store.isBusy)
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
-        .background(.bar)
+    #if DEBUG
+    /// `--agent-autoconfirm` taps "Looks good" once the plan has streamed (simulator screenshots).
+    private func debugAutoconfirm() async {
+        guard ProcessInfo.processInfo.arguments.contains("--agent-autoconfirm"), seed != nil else { return }
+        try? await Task.sleep(for: .seconds(2))
+        while store.isBusy { try? await Task.sleep(for: .milliseconds(300)) }
+        store.send(display: "Looks good — find flights, stays & cars", content: "Confirm the plan and find options")
     }
 
-    private func sendDraft() {
-        let text = draft
-        draft = ""
-        inputFocused = false
-        store.send(display: text)
+    /// `--agent-scroll <fraction>` scrolls to the last turn after the answer streams.
+    private func debugScroll(_ proxy: ScrollViewProxy) async {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "--agent-scroll"), i + 1 < args.count, let y = Double(args[i + 1]) else { return }
+        try? await Task.sleep(for: .seconds(args.contains("--agent-autoconfirm") ? 34 : 18))
+        withAnimation { proxy.scrollTo(store.turns.last?.id, anchor: UnitPoint(x: 0.5, y: y)) }
     }
+    #endif
 }
 
 private struct TurnView: View {
@@ -261,28 +241,56 @@ private struct TurnView: View {
     var body: some View {
         switch turn.role {
         case .user:
-            HStack {
-                Spacer(minLength: 40)
-                Text(turn.display)
-                    .padding(12)
-                    .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+            if turn.isSharedConversation {
+                SharedConversationCard(text: turn.display)
+            } else {
+                UserBubble(text: turn.display)
             }
         case .assistant:
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 if turn.isStreaming && turn.program.isEmpty {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text(turn.status).font(.subheadline).foregroundStyle(.secondary)
+                    AssistantBubble {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text(turn.status).foregroundStyle(LensDesign.muted)
+                        }
                     }
                 }
                 if let runtime = turn.runtime, !turn.program.isEmpty {
                     OpenUIView(runtime: runtime)
                 }
                 if let error = turn.error {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.footnote).foregroundStyle(.red)
+                    AssistantBubble { Text(error).foregroundStyle(.red) }
                 }
             }
         }
+    }
+}
+
+/// A pasted group chat / email: shown as what it is, with where it stays.
+private struct SharedConversationCard: View {
+    let text: String
+    @State private var expanded = false
+
+    private var lines: [Substring] { text.split(separator: "\n") }
+    private var heading: String { String(lines.first ?? "Shared conversation") }
+    private var bodyText: String { lines.dropFirst().joined(separator: "\n") }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(heading).font(.headline).foregroundStyle(.white)
+            Text("Shared with Lens · stays on this device").font(.footnote).foregroundStyle(.white.opacity(0.6))
+            Text(bodyText)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(expanded ? nil : 4)
+            Button(expanded ? "Show less" : "Show all") { withAnimation { expanded.toggle() } }
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.8))
+        }
+        .padding(16)
+        .background(LensDesign.ink, in: RoundedRectangle(cornerRadius: LensDesign.bubbleRadius, style: .continuous))
+        .frame(maxWidth: 320, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }

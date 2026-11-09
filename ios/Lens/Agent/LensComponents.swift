@@ -35,6 +35,8 @@ enum LensComponents {
         ],
         group: "Trip booking"
     )
+    // Every agent answer is a Card: draw it as the design's borderless light-gray card.
+    .replacingRenderer(for: "Card") { context in AnyView(LensCardView(context: context)) }
 }
 
 /// Runs every Query()/Mutation() in a generated UI. Most go to the backend (POST /tools/{name});
@@ -46,6 +48,7 @@ struct LensToolProvider: OpenUIToolProvider {
     }
 
     func callTool(_ name: String, arguments: OpenUIObject) async throws -> OpenUIValue {
+        await MainActor.run { NotificationCenter.default.post(name: .lensToolCalled, object: name) }
         if name == "notify_friends" {
             let message = arguments["message"]?.stringValue ?? ""
             let status = await FriendNotifier.present(message: message)
