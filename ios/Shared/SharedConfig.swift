@@ -40,5 +40,7 @@ enum SharedConfig {
         static let broadcasting = "broadcasting"
         static let framesSent = "framesSent"
         static let lastUploadError = "lastUploadError"
+        /// Set by the app while it is on screen, so the broadcast doesn't record Lens itself.
+        static let lensForegroundUntil = "lensForegroundUntil"
     }
 }

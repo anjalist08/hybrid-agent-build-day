@@ -212,3 +212,53 @@ def app_stats(db: DB, since: float) -> list[dict]:
         "WHERE ts_end >= ? GROUP BY app ORDER BY dwell_s DESC",
         (since,),
     )
+
+
+def forget_source(db: DB, source_key: str) -> int:
+    """Delete everything saved from one source (used when the user switches it off)."""
+    ids = [r["id"] for r in db.query("SELECT id, app FROM impressions") if sources.source_for(r["app"]) == source_key]
+    for imp_id in ids:
+        db.execute("DELETE FROM impressions WHERE id=?", (imp_id,))
+        db.execute("DELETE FROM impressions_fts WHERE rowid=?", (imp_id,))
+    frames = [r["id"] for r in db.query("SELECT id, app FROM frames") if sources.source_for(r["app"] or "") == source_key]
+    for fid in frames:
+        db.execute("UPDATE frames SET observation=NULL WHERE id=?", (fid,))
+    db.execute("DELETE FROM entities WHERE id NOT IN (SELECT entity_id FROM impression_entities)")
+    return len(ids)
+
+
+def recall(db: DB, query: str = "", source: str | None = None, hours: float | None = None,
+           limit: int = 25, now: float | None = None) -> dict:
+    """What the user saw: matching impressions (optionally one source, e.g. "x", and a time window),
+    plus time per app and top topics. Text only — no screenshots ever leave the machine."""
+    now = now or time.time()
+    since = now - hours * 3600 if hours else 0
+    source = (source or "").strip().lower() or None
+    rows = search(db, query, limit=200) if query.strip() else \
+        db.query("SELECT * FROM impressions ORDER BY ts_end DESC LIMIT 200")
+    if source:
+        rows = [r for r in rows if sources.source_for(r["app"]) == source]
+        if not rows:  # FTS may have missed: fall back to everything from that source
+            rows = [r for r in db.query("SELECT * FROM impressions ORDER BY ts_end DESC LIMIT 500")
+                    if sources.source_for(r["app"]) == source]
+    rows = [r for r in rows if r["ts_end"] >= since][:limit]
+
+    def ago(ts: float) -> str:
+        d = now - ts
+        return "just now" if d < 90 else f"{int(d // 60)}m ago" if d < 3600 else \
+            f"{int(d // 3600)}h ago" if d < 86400 else f"{int(d // 86400)}d ago"
+
+    states = {s["key"]: s for s in sources.get_sources()}
+    # Never surface sources the user switched off, even if something was saved before.
+    rows = [r for r in rows if states.get(sources.source_for(r["app"]), {}).get("enabled", False)]
+    return {
+        "items": [{"app": r["app"], "kind": r["kind"], "title": r["title"], "author": r["author"],
+                   "summary": r["summary"], "topics": row_topics(r), "when": ago(r["ts_end"]),
+                   "seconds": round(r["dwell_s"]), "link": link_for(r["app"], r["kind"], r["title"], r["author"], r["url"])}
+                  for r in rows],
+        "time_by_app": app_stats(db, since or now - 7 * 86400),
+        "top_topics": [t["name"] for t in interests(db, "topic", 8, now)],
+        "source": states.get(source, {}).get("label") if source else None,
+        "source_enabled": states.get(source, {}).get("enabled", True) if source else True,
+        "sources_off": [s["label"] for s in states.values() if not s["enabled"]],
+    }

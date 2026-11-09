@@ -30,6 +30,7 @@ log = logging.getLogger("lens")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 db = DB(settings.db_path)
+agent.attach_db(db)
 
 
 @dataclass
@@ -268,5 +269,10 @@ def get_sources() -> list[dict]:
 
 @app.post("/settings/sources")
 def set_sources(changes: dict[str, bool] = Body(...)) -> list[dict]:
-    """Body: {"instagram": true, "messages": false, ...}"""
-    return sources.set_sources(changes)
+    """Body: {"instagram": true, "messages": false, ...}. Switching a source off also forgets it."""
+    result = sources.set_sources(changes)
+    for key, enabled in changes.items():
+        if not enabled:
+            n = kb.forget_source(db, key)
+            log.info("source %s switched off: forgot %d saved items", key, n)
+    return result

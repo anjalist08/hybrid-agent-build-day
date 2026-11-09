@@ -3,10 +3,33 @@ import SwiftUI
 
 @main
 struct LensApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             HomeView()
+                // Heartbeat while Lens is in front: the capture extension skips frames until it expires,
+                // so screen memory never records Lens itself. Expires on its own if the app is killed.
+                .task {
+                    while !Task.isCancelled {
+                        if scenePhase == .active { LensForeground.mark() }
+                        try? await Task.sleep(for: .seconds(2))
+                    }
+                }
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { LensForeground.mark() } else { LensForeground.clear() }
+        }
+    }
+}
+
+enum LensForeground {
+    static func mark() {
+        SharedConfig.defaults.set(Date().timeIntervalSince1970 + 4, forKey: SharedConfig.Keys.lensForegroundUntil)
+    }
+
+    static func clear() {
+        SharedConfig.defaults.set(0, forKey: SharedConfig.Keys.lensForegroundUntil)
     }
 }
 

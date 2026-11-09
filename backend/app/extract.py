@@ -25,7 +25,10 @@ Extract the content items the user is looking at: posts, videos, articles, searc
 profiles. Rules:
 - At most 6 items, the most prominent first. Only items that are mostly visible and readable.
   Skip ads, navigation chrome, and "trending" sidebars unless the user is clearly focused on them.
-- app: the app or website name (e.g. "YouTube", "X", "Safari", "Medium").
+- app: the app or website whose INTERFACE is on screen, judged from its chrome (logo, tab bar, address bar,
+  layout) — never from what the text talks about. A chat assistant screen titled "Lens" (light-gray chat
+  bubbles, "Home ·" breadcrumb, an "Ask" or "Message" box), or the Lens app's home/settings, is app "Lens",
+  even if the conversation mentions X, YouTube or trips.
 - title: the video title, headline, search query, or the first line of the post (max ~120 chars).
   Never a duration, view count, or timestamp on its own.
 - author: the handle, channel or byline exactly as shown, or null.

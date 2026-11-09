@@ -109,7 +109,7 @@ struct ScreenSourcesSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Screen memory remembers").font(.headline).foregroundStyle(LensDesign.ink)
-            Text("Pick the apps Lens may learn from while capture is on. Everything else is dropped on your Mac.")
+            Text("Pick the apps Lens may learn from while capture is on. Everything else is dropped on your Mac, and switching an app off also forgets what was saved from it.")
                 .font(.footnote).foregroundStyle(LensDesign.muted)
             if sources.isEmpty {
                 Text(error ?? "Loading…").font(.footnote).foregroundStyle(error == nil ? LensDesign.muted : .red)

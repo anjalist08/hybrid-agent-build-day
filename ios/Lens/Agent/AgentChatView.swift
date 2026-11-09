@@ -82,7 +82,8 @@ final class AgentStore {
 
         isBusy = true
         reply.isStreaming = true
-        reply.status = turns.count <= 2 ? "Reading the chat on this device…" : "Working on it…"
+        let isSharedChat = text.split(separator: "\n").count >= 3
+        reply.status = isSharedChat ? "Reading the chat on this device…" : turns.count <= 2 ? "Checking your memory…" : "Working on it…"
         task = Task { [weak self] in
             await self?.stream(history: Array(history), into: reply)
         }
@@ -128,7 +129,7 @@ final class AgentStore {
                 case "status":
                     switch event["status"] as? String {
                     case "thinking": reply.status = "Thinking it through…"
-                    case "tool": reply.status = "Looking things up…"
+                    case "tool": reply.status = "Looking through your screen memory on your Mac…"
                     default: reply.status = "Putting it together…"
                     }
                 case "delta":
@@ -207,7 +208,8 @@ struct AgentChatView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 18) {
             Breadcrumb(title: title, onBack: onHome)
-            if title != nil || !store.turns.isEmpty {
+            // Trip steps only for trip conversations (opened from a shared chat, or once a search ran).
+            if title != nil || store.step > 0 {
                 StepTracker(steps: AgentStore.steps, current: store.step)
             }
         }

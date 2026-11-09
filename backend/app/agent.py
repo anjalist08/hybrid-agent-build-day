@@ -19,7 +19,8 @@ from pathlib import Path
 
 import anthropic
 
-from . import travel
+from . import kb, travel
+from .db import DB
 from .config import settings
 
 log = logging.getLogger("lens.agent")
@@ -27,8 +28,37 @@ log = logging.getLogger("lens.agent")
 PROMPT_PATH = Path(__file__).parent / "openui" / "system-prompt.md"
 MAX_TOOL_ROUNDS = 3
 
-# Server-side tools the model may call before writing UI (none needed: the UI fetches live data).
-MODEL_TOOLS: list[dict] = []
+# Server-side tools the model may call before writing UI. Trip data is fetched by the UI itself;
+# memory is looked up here, on this machine, and only matching text rows reach the model.
+MODEL_TOOLS: list[dict] = [
+    {
+        "name": "recall",
+        "description": "Look up what the user read and watched on their phone (local screen memory). "
+                       "Use for any question about their recent activity on X/Twitter, Instagram, Facebook, YouTube, "
+                       "the web, messages, etc. Returns matching items with app, title, author, time and link, plus "
+                       "time spent per app and top topics. source is one of: x, instagram, facebook, tiktok, reddit, "
+                       "linkedin, threads, youtube, web, messages, other.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Topic or words to search for; empty for 'everything recent'"},
+                "source": {"type": "string", "description": "Limit to one source key, e.g. 'x'"},
+                "hours": {"type": "number", "description": "Only the last N hours, e.g. 24 for 'today'"},
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        "eager_input_streaming": True,
+    },
+]
+
+_db: DB | None = None
+
+
+def attach_db(db: DB) -> None:
+    """main.py hands over the knowledge base so the recall tool can read it."""
+    global _db
+    _db = db
 
 _client: anthropic.Anthropic | None = None
 
@@ -41,7 +71,17 @@ def _claude() -> anthropic.Anthropic:
 
 
 def _run_model_tool(name: str, args: object) -> tuple[str, bool]:
-    return f"Unknown tool {name}", True
+    """Returns (content, is_error). Inputs are validated here because eager streaming skips it."""
+    if not isinstance(args, dict):
+        return json.dumps({"INVALID_JSON": str(args)}), True
+    if name == "recall" and _db is not None and isinstance(args.get("query", ""), str):
+        hours = args.get("hours")
+        result = kb.recall(_db, args.get("query", ""), args.get("source"),
+                           float(hours) if isinstance(hours, (int, float)) and hours > 0 else None)
+        _db.log_route("recall", "local", "knowledge base", 0, True,
+                      f"{len(result['items'])} items as text, 0 images")
+        return json.dumps(result), False
+    return f"Unknown tool or bad arguments: {name} {json.dumps(args)[:200]}", True
 
 
 def _system() -> list[dict]:

@@ -29,6 +29,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
         guard sampleBufferType == .video else { return }
+        // Don't record Lens's own screens (the app refreshes this heartbeat while it's in front).
+        let lensUntil = SharedConfig.defaults.double(forKey: SharedConfig.Keys.lensForegroundUntil)
+        guard Date().timeIntervalSince1970 > lensUntil else { return }
 
         let now = CFAbsoluteTimeGetCurrent()
         let interval = SharedConfig.captureInterval

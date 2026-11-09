@@ -104,3 +104,18 @@ def test_sources_allowlist(tmp_path, monkeypatch):
     assert len(kb.record_observation(db, _obs(app="iMessage", title="see you at 7"), 1000.0)) == 1
     sources.set_sources({"instagram": False})
     assert kb.blocked_reason("Instagram") is not None
+
+
+def test_recall_hides_and_forget_removes_switched_off_sources(tmp_path, monkeypatch):
+    from app import sources
+    monkeypatch.setattr(sources, "_state", None)
+    monkeypatch.setattr(sources, "_path", lambda: tmp_path / "sources.json")
+    db = DB(":memory:")
+    sources.set_sources({"messages": True})
+    kb.record_observation(db, _obs(app="iMessage", title="see you at 7", author="+1 555 0100"), 1000.0)
+    kb.record_observation(db, _obs(app="X", title="Agents everywhere"), 1000.0)
+    assert len(kb.recall(db, "", "messages", now=1100.0)["items"]) == 1
+    sources.set_sources({"messages": False})
+    assert kb.recall(db, "", "messages", now=1100.0)["items"] == []          # hidden immediately
+    assert kb.forget_source(db, "messages") == 1                               # and forgotten
+    assert [r["app"] for r in db.query("SELECT app FROM impressions")] == ["X"]
