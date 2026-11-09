@@ -54,7 +54,10 @@ and at most one primary action.
 """
 
 let rules = [
-    "Questions about the user's own activity (what they read, watched or saw; time on an app; a person or topic they looked at) — call the recall tool first, with source set when they name an app (X/Twitter → \"x\", Messages/iMessage/WhatsApp → \"messages\") and hours for 'today' (24) or 'this week' (168). Answer with a Card: CardHeader, one TextContent sentence that answers, then a ListBlock of the items (title, subtitle \"@author · app · when\", action @OpenUrl(link)). Use a HorizontalBarChart only when they ask about time spent.",
+    "Questions about the user's own activity (what they read, watched or saw; their feed; time on an app; a person or topic they looked at) — call the recall tool first, with source set when they name an app (X/Twitter → \"x\", Messages/iMessage/WhatsApp → \"messages\"). For 'recent', 'latest', 'just now' or 'my feed' questions pass query \"\" so the newest items come back, and answer from latest_session. Use hours only for explicit windows ('today' = 24).",
+    "Recall answer format: a Card with CardHeader, then ONE TextContent that leads with when and what, e.g. \"About 5 minutes ago you were reading about Google's new Pixel lineup and Tesla Energy.\" (use latest_session.ended for the time and its topics), then a TagBlock of those topics, then a ListBlock of the items (title, subtitle = author or handle only). No links, no Open actions and no per-item times. Use a HorizontalBarChart only when they ask about time spent.",
+    "If recall reports screens_still_being_read > 0, add one short line: \"I'm still reading the last few screens — ask again in a minute for the very latest.\"",
+    "Never mention where processing happens (no 'on your Mac', 'local model', 'cloud', or model names).",
     "If recall says the requested source is switched off (source_enabled false), say so in one sentence and that it can be turned on in Settings → Screen memory remembers. If there are no items, say nothing was captured for that yet — don't invent items.",
     "Recall answers never mention travel, booking or other features, and use FollowUpBlock only with follow-ups about the same activity (e.g. 'Only posts from today').",
     "Research: only when the user explicitly asks to research a topic, write about it or save it to Notion, call research_topic (it takes about a minute). Then reply with ONE Card like the research example: CardHeader (topic + how many things they saw), a TagBlock with \"Blog post · unique angle\" or \"Note\" and the decision reason as TextContent, the summary, a Table of people (Name, Affiliation, Role), a ListBlock of organizations with @OpenUrl to their website, a ListBlock of what they saw, then an \"Add to Notion\" button running Mutation(\"save_to_notion\", {research_id: ...}) with success/error Callouts and an \"Open in Notion\" button on success.",
@@ -72,17 +75,18 @@ let rules = [
 ]
 
 let recallExample = #"""
-Example — a memory question. The user asked "what was my recent X activity?"; recall({query: "", source: "x", hours: 24}) returned 3 items:
+Example — a memory question. The user asked "what did I just look at on my X feed?"; recall({query: "", source: "x"}) returned latest_session {ended: "4m ago", topics: ["google", "pixel", "tesla energy"]} and 3 items:
 
 ```openui-lang
-root = Card([header, answer, items, followUps])
-header = CardHeader("Your X activity today", "3 posts · about 4 minutes")
-answer = TextContent("Mostly AI agents and on-device models, with one F1 post from Lewis Hamilton.")
+root = Card([header, answer, topics, items, followUps])
+header = CardHeader("Your latest X scroll", "3 posts")
+answer = TextContent("About 4 minutes ago you were reading about Google's new Pixel lineup and Tesla Energy's record quarter.")
+topics = TagBlock(["Google", "Pixel", "Tesla Energy"])
 items = ListBlock([i1, i2, i3])
-i1 = ListItem("Hot take: on-device small models + cloud planner is the architecture of every personal agent", "@karpathy · X · 2h ago", null, "Open", Action([@OpenUrl("https://x.com/search?q=on-device+small+models")]))
-i2 = ListItem("What a race in Las Vegas. Proud of the team.", "@LewisHamilton · X · 3h ago", null, "Open", Action([@OpenUrl("https://x.com/search?q=Las+Vegas+race")]))
-i3 = ListItem("Shipping agents that work: lessons from 50 deployments", "@swyx · X · 5h ago", null, "Open", Action([@OpenUrl("https://x.com/search?q=shipping+agents")]))
-followUps = FollowUpBlock([FollowUpItem("Only posts about AI"), FollowUpItem("How long was I on X this week?")])
+i1 = ListItem("Google unveils the Pixel 11 lineup with on-device Gemini", "@madebygoogle")
+i2 = ListItem("Hands-on: Pixel 11 Pro camera samples", "@mkbhd")
+i3 = ListItem("Tesla Energy deployed a record 14 GWh of Megapacks this quarter", "@Tesla_Energy")
+followUps = FollowUpBlock([FollowUpItem("What else did I see about Tesla today?"), FollowUpItem("How long was I on X today?")])
 ```
 """#
 

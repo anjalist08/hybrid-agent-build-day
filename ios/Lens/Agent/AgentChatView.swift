@@ -132,7 +132,7 @@ final class AgentStore {
                     case "tool":
                         reply.status = (event["tool"] as? String) == "research_topic"
                             ? "Researching people and companies on the web… (about a minute)"
-                            : "Looking through your screen memory on your Mac…"
+                            : "Looking through what you've seen…"
                     default: reply.status = "Putting it together…"
                     }
                 case "delta":

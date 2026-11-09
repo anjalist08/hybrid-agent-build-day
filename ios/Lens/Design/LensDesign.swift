@@ -73,27 +73,26 @@ struct StepTracker: View {
     let current: Int
 
     var body: some View {
+        // Equal flexible columns so all steps always fit the screen; future steps keep their space hidden.
         HStack(alignment: .top, spacing: 0) {
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                if index <= current {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ZStack(alignment: .leading) {
-                            Rectangle().fill(LensDesign.hairline).frame(height: 2)
-                            Circle()
-                                .fill(index == current ? LensDesign.blue : Color(.systemGray3))
-                                .frame(width: 8, height: 8)
-                        }
-                        .frame(height: 8)
-                        Text(step)
-                            .font(.footnote)
-                            .foregroundStyle(index == current ? LensDesign.blue : LensDesign.muted)
-                            .lineLimit(1)
-                            .fixedSize()
+                VStack(alignment: .leading, spacing: 10) {
+                    ZStack(alignment: .leading) {
+                        Rectangle().fill(LensDesign.hairline).frame(height: 2)
+                        Circle()
+                            .fill(index == current ? LensDesign.blue : Color(.systemGray3))
+                            .frame(width: 8, height: 8)
                     }
-                    .frame(width: 128, alignment: .leading)
+                    .frame(height: 8)
+                    Text(step)
+                        .font(.footnote)
+                        .foregroundStyle(index == current ? LensDesign.blue : LensDesign.muted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .opacity(index <= current ? 1 : 0)
             }
-            Spacer(minLength: 0)
         }
         .animation(.easeInOut(duration: 0.25), value: current)
     }
@@ -183,5 +182,29 @@ struct LensCardView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(LensDesign.surface, in: RoundedRectangle(cornerRadius: LensDesign.bubbleRadius, style: .continuous))
+    }
+}
+
+/// Home wallpaper: soft, colorful light — blue and indigo with warm pink and amber glows.
+struct LensWallpaper: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Color(red: 0.16, green: 0.45, blue: 0.98), Color(red: 0.36, green: 0.24, blue: 0.86)],
+                           startPoint: .top, endPoint: .bottom)
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                ZStack {
+                    Circle().fill(Color(red: 1.0, green: 0.42, blue: 0.62)).frame(width: w * 1.1)
+                        .position(x: w * 0.95, y: h * 0.62).opacity(0.75)
+                    Circle().fill(Color(red: 1.0, green: 0.72, blue: 0.30)).frame(width: w * 0.9)
+                        .position(x: w * 0.05, y: h * 0.92).opacity(0.70)
+                    Circle().fill(Color(red: 0.25, green: 0.85, blue: 0.95)).frame(width: w * 0.9)
+                        .position(x: w * 0.0, y: h * 0.18).opacity(0.55)
+                    Circle().fill(Color(red: 0.55, green: 0.35, blue: 1.0)).frame(width: w * 0.8)
+                        .position(x: w * 0.85, y: h * 0.05).opacity(0.6)
+                }
+                .blur(radius: 90)
+            }
+        }
     }
 }

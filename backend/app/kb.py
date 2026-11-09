@@ -147,7 +147,7 @@ def interests(db: DB, etype: str | None = None, limit: int = 15, now: float | No
     now = now or time.time()
     half_life_s = settings.interest_half_life_h * 3600
     sql = (
-        "SELECT e.type, e.name, i.dwell_s, i.ts_end FROM entities e "
+        "SELECT e.type, e.name, i.dwell_s, i.ts_end, i.app FROM entities e "
         "JOIN impression_entities ie ON ie.entity_id=e.id JOIN impressions i ON i.id=ie.impression_id"
     )
     params: tuple = ()
@@ -156,6 +156,8 @@ def interests(db: DB, etype: str | None = None, limit: int = 15, now: float | No
         params = (etype,)
     scores: dict[tuple[str, str], dict] = {}
     for r in db.query(sql, params):
+        if blocked_reason(r["app"]):  # switched-off sources (e.g. Messages) never show up in stats
+            continue
         decay = math.pow(0.5, max(0.0, now - r["ts_end"]) / half_life_s)
         s = scores.setdefault((r["type"], r["name"]), {"type": r["type"], "name": r["name"], "score": 0.0,
                                                       "impressions": 0, "dwell_s": 0.0})
@@ -172,7 +174,9 @@ def interests(db: DB, etype: str | None = None, limit: int = 15, now: float | No
 def _fts_query(text: str) -> str | None:
     stop = {"what", "have", "been", "about", "the", "and", "for", "with", "that", "this", "show", "tell",
             "watching", "watched", "reading", "read", "browsed", "seen", "did", "today", "week", "who",
-            "most", "lately", "recently", "any", "some", "from", "into", "you", "your", "are", "was"}
+            "most", "lately", "recently", "any", "some", "from", "into", "you", "your", "are", "was",
+            "feed", "viewed", "view", "looked", "latest", "last", "recent", "scrolled", "scrolling", "saw",
+            "activity", "just", "now", "earlier", "things", "stuff", "posts", "tweets", "timeline"}
     words = [w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 2 and w not in stop]
     if not words:
         return None
@@ -207,11 +211,12 @@ def search(db: DB, text: str, limit: int = 40) -> list[dict]:
 
 
 def app_stats(db: DB, since: float) -> list[dict]:
-    return db.query(
+    rows = db.query(
         "SELECT app, COUNT(*) AS impressions, ROUND(SUM(dwell_s)) AS dwell_s FROM impressions "
         "WHERE ts_end >= ? GROUP BY app ORDER BY dwell_s DESC",
         (since,),
     )
+    return [r for r in rows if not blocked_reason(r["app"])]
 
 
 def forget_source(db: DB, source_key: str) -> int:
@@ -241,7 +246,8 @@ def recall(db: DB, query: str = "", source: str | None = None, hours: float | No
         if not rows:  # FTS may have missed: fall back to everything from that source
             rows = [r for r in db.query("SELECT * FROM impressions ORDER BY ts_end DESC LIMIT 500")
                     if sources.source_for(r["app"]) == source]
-    rows = [r for r in rows if r["ts_end"] >= since][:limit]
+    # Newest first: "what did I just see" must surface the latest screens, not older strong matches.
+    rows = sorted((r for r in rows if r["ts_end"] >= since), key=lambda r: r["ts_end"], reverse=True)[:limit]
 
     def ago(ts: float) -> str:
         d = now - ts
@@ -251,7 +257,22 @@ def recall(db: DB, query: str = "", source: str | None = None, hours: float | No
     states = {s["key"]: s for s in sources.get_sources()}
     # Never surface sources the user switched off, even if something was saved before.
     rows = [r for r in rows if states.get(sources.source_for(r["app"]), {}).get("enabled", False)]
+    # The latest browsing session: items until a gap of more than 15 minutes.
+    session: list[dict] = []
+    for r in rows:
+        if session and session[-1]["ts_end"] - r["ts_end"] > 15 * 60:
+            break
+        session.append(r)
+    latest_session = {
+        "started": ago(session[-1]["ts_start"]) if session else None,
+        "ended": ago(session[0]["ts_end"]) if session else None,
+        "apps": sorted({r["app"] for r in session}),
+        "topics": [t for t, _ in __import__("collections").Counter(
+            t for r in session for t in row_topics(r)).most_common(6)],
+        "count": len(session),
+    }
     return {
+        "latest_session": latest_session,
         "items": [{"app": r["app"], "kind": r["kind"], "title": r["title"], "author": r["author"],
                    "summary": r["summary"], "topics": row_topics(r), "when": ago(r["ts_end"]),
                    "seconds": round(r["dwell_s"]), "link": link_for(r["app"], r["kind"], r["title"], r["author"], r["url"])}

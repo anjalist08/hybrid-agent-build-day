@@ -141,7 +141,7 @@ def search_flights(origin: str, destination: str, depart_date: str, return_date:
                         "detail": f"{segs[0]['marketing_carrier']['iata_code']}{segs[0]['marketing_carrier_flight_number']}"
                                   f" · {o.get('total_emissions_kg') or '?'} kg CO₂",
                         "price": _money(o["total_amount"]), "currency": o["total_currency"],
-                        "badge": "Seat map" if o["owner"].get("iata_code") == "ZZ" else "",
+                        "badge": "",
                         "image": o["owner"].get("logo_symbol_url") or ""})
     return {"kind": "flight", "source": "duffel", "count": len(options), "options": options,
             "summary": f"{origin} ⇄ {destination}" if return_date else f"{origin} → {destination}"}

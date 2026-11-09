@@ -30,7 +30,7 @@ log = logging.getLogger("lens")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 db = DB(settings.db_path)
-agent.attach_db(db)
+agent.attach_db(db, backlog=lambda: backlog())
 
 
 @dataclass

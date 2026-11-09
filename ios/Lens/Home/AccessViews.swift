@@ -19,7 +19,7 @@ enum AccessSettings {
         var detail: String {
             switch self {
             case .sharedChats: return "Group chats and emails you share with Lens"
-            case .screen: return "What you read and watch, read on your Mac"
+            case .screen: return "What you read and watch, kept private to you"
             case .mail: return "Emails and reservations"
             case .calendar: return "Events and availability"
             case .photos: return "Photos you choose to share"

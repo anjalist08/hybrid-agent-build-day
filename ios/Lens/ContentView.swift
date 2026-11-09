@@ -155,7 +155,6 @@ struct AssistantChatView: View {
         }
         if let answer = model.answer, !model.isThinking {
             Text(answer.speech).font(.body)
-            if let route = model.route { RouteBadges(route: route, sttOnDevice: voice.onDevice) }
         }
     }
 

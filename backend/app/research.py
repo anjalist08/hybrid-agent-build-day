@@ -84,12 +84,12 @@ What the user recently saw about it on their phone (from their own screen memory
 
 Use web search to find:
 1. For each author/handle above that matters: their real name, current affiliation (university, lab or company), role, and a profile URL.
-2. 3-6 other notable people actively commenting on or researching this topic, with affiliation and profile URL.
-3. 3-6 startups, companies or research labs working on it, with their website and one line on what they do.
+2. 2-3 other notable people actively commenting on or researching this topic, with affiliation and profile URL.
+3. 2-3 startups, companies or research labs working on it, with their website and one line on what they do.
 4. What is genuinely new or contested about the topic right now.
 
-Write concise research notes with every URL you rely on. Do not invent people, affiliations or links."""}]
-    tools = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 8}]
+Be brief: short bullet notes with every URL you rely on. Do not invent people, affiliations or links."""}]
+    tools = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}]
     notes = []
     for _ in range(4):  # continue across pause_turn
         resp = _claude().messages.create(model=settings.claude_model, max_tokens=12000,
@@ -124,8 +124,9 @@ Already in the user's Notion "Writing" database: {json.dumps(existing) if existi
 Decide the format:
 - "blog_post" only if the angle is unique: not already covered in their Notion above, and more than a generic
   rehash of a well-known topic (e.g. it connects what they saw with who is working on it in a fresh way).
-  Then write 3-4 sections with 2-3 paragraphs each, in a clear first-person blog voice.
-- Otherwise "note": 1-2 short sections, bullet-like paragraphs, for the user to build on later.
+  Then write 2 short sections of 1-2 paragraphs each, in a clear first-person blog voice (brief — this is a draft).
+- Otherwise "note": 1 short section of 2-4 one-line paragraphs, for the user to build on later.
+Keep everything concise: at most 3 key takeaways, at most 4 people, at most 3 organizations, at most 5 sources.
 People must be real and come from the notes or the seen items; keep only those with a known affiliation or
 clear relevance. Sources are the items the user actually saw (with their links), plus at most 3 key web sources."""}],
     )

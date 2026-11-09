@@ -69,13 +69,14 @@ MODEL_TOOLS: list[dict] = [
 ]
 
 _db: DB | None = None
+_backlog = None  # callable -> {"frames_pending": n, "behind_s": s}, set by main.py
 _pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
 
-def attach_db(db: DB) -> None:
-    """main.py hands over the knowledge base so the recall tool can read it."""
-    global _db
-    _db = db
+def attach_db(db: DB, backlog=None) -> None:
+    """main.py hands over the knowledge base (and the indexing backlog) for the recall tool."""
+    global _db, _backlog
+    _db, _backlog = db, backlog
 
 _client: anthropic.Anthropic | None = None
 
@@ -95,6 +96,8 @@ def _run_model_tool(name: str, args: object) -> tuple[str, bool]:
         hours = args.get("hours")
         result = kb.recall(_db, args.get("query", ""), args.get("source"),
                            float(hours) if isinstance(hours, (int, float)) and hours > 0 else None)
+        if _backlog:
+            result["screens_still_being_read"] = _backlog().get("frames_pending", 0)
         _db.log_route("recall", "local", "knowledge base", 0, True,
                       f"{len(result['items'])} items as text, 0 images")
         return json.dumps(result), False

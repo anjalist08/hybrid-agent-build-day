@@ -30,7 +30,7 @@ struct SeatMapPreview: View {
                 ("origin", "SFO"), ("destination", "RNO"), ("depart_date", "2027-01-15"),
                 ("return_date", "2027-01-18"), ("passengers", 3),
             ]))
-            let offer = flights["options"]?.arrayValue?.first { $0["badge"]?.stringValue == "Seat map" }
+            let offer = flights["options"]?.arrayValue?.first { $0["title"]?.stringValue?.hasPrefix("Duffel Airways") == true }
                 ?? flights["options"]?.arrayValue?.first
             guard let id = offer?["id"]?.stringValue else { error = "No flights"; return }
             let value = try await tools.callTool("get_seat_map", arguments: OpenUIObject([("offer_id", .string(id))]))

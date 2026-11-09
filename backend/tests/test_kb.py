@@ -119,3 +119,14 @@ def test_recall_hides_and_forget_removes_switched_off_sources(tmp_path, monkeypa
     assert kb.recall(db, "", "messages", now=1100.0)["items"] == []          # hidden immediately
     assert kb.forget_source(db, "messages") == 1                               # and forgotten
     assert [r["app"] for r in db.query("SELECT app FROM impressions")] == ["X"]
+
+
+def test_recall_returns_latest_first_and_latest_session():
+    db = DB(":memory:")
+    kb.record_observation(db, _obs(app="X", title="Nvidia Blackwell ships", topics=("nvidia",)), 1000.0)
+    kb.record_observation(db, _obs(app="X", title="Google unveils new Pixel lineup", topics=("google",)), 10_000.0)
+    kb.record_observation(db, _obs(app="X", title="Tesla Energy record Megapack quarter", topics=("tesla energy",)), 10_060.0)
+    r = kb.recall(db, "what did I most recently view on my feed", "x", now=10_100.0)
+    assert r["items"][0]["title"].startswith("Tesla Energy")
+    assert r["latest_session"]["count"] == 2
+    assert set(r["latest_session"]["topics"]) == {"google", "tesla energy"}

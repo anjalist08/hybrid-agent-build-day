@@ -5,7 +5,6 @@ struct Suggestion: Identifiable, Equatable {
     enum Kind: Equatable {
         case trip(title: String, seed: String)
         case ask(question: String)
-        case capture
     }
 
     let id: String
@@ -41,26 +40,24 @@ struct HomeView: View {
     @State private var showPermission: Suggestion?
     @State private var showMemory = false
     @State private var showSeatMapPreview = false
-    @StateObject private var capture = ScreenCaptureController()
 
     var body: some View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 ScrollView {
-                    VStack(spacing: 0) {
-                        clock.padding(.top, 24).padding(.bottom, 36)
+                    VStack(spacing: 12) {
+                        clock.padding(.top, 24).padding(.bottom, 28)
                         ForEach(visibleSuggestions) { item in
                             SuggestionRow(item: item, onAction: { act(on: item) }, onDismiss: {
                                 withAnimation { _ = dismissed.insert(item.id) }
                             })
-                            if item != visibleSuggestions.last { Divider().overlay(LensDesign.hairline) }
                         }
                     }
-                    .padding(.horizontal, 28)
+                    .padding(.horizontal, 20)
                 }
                 bottomBar
             }
-            .background(Color.white)
+            .background(LensWallpaper().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { route in
                 switch route {
@@ -92,8 +89,6 @@ struct HomeView: View {
             )
         }
         .task { await loadMemoryLine() }
-        .onAppear { capture.startPolling() }
-        .background(ScreenCaptureHost(controller: capture).frame(width: 1, height: 1), alignment: .topLeading)
         #if DEBUG
         .task {
             // Simulator screenshots: `--preview-trip` opens the trip chat as if "Take a look" was tapped.
@@ -113,12 +108,13 @@ struct HomeView: View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             VStack(spacing: 4) {
                 Text(context.date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                    .font(.title3).foregroundStyle(LensDesign.muted)
+                    .font(.title3.weight(.medium)).foregroundStyle(.white.opacity(0.85))
                 Text(Self.clockFormat.string(from: context.date))
                     .font(.system(size: 96, weight: .thin))
-                    .foregroundStyle(LensDesign.ink)
+                    .foregroundStyle(.white)
                     .monospacedDigit()
-                Text(greeting(for: context.date)).font(.body).foregroundStyle(LensDesign.muted)
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+                Text(greeting(for: context.date)).font(.body).foregroundStyle(.white.opacity(0.85))
             }
         }
     }
@@ -132,14 +128,14 @@ struct HomeView: View {
     private var bottomBar: some View {
         HStack {
             Button("Settings") { showSettings = true }
-                .font(.body).foregroundStyle(LensDesign.muted)
+                .font(.body.weight(.medium)).foregroundStyle(.white)
             Spacer()
             Button {
                 path.append(.chat(title: nil, seed: nil))
             } label: {
-                Text("Ask").font(.body).foregroundStyle(LensDesign.blue)
-                    .padding(.horizontal, 30).frame(height: 36)
-                    .background(LensDesign.surface, in: Capsule())
+                Text("Ask").font(.body.weight(.medium)).foregroundStyle(LensDesign.blue)
+                    .padding(.horizontal, 30).frame(height: 38)
+                    .background(.white, in: Capsule())
             }
             .buttonStyle(.plain)
         }
@@ -156,12 +152,7 @@ struct HomeView: View {
                        action: "Take a look", kind: .trip(title: "Tahoe trip", seed: DemoContent.skiSquad)),
             Suggestion(id: "memory", category: "From your screen", time: "today",
                        text: memoryLine ?? "Lens remembers what you read and watch — on this device. Ask what you saw earlier.",
-                       action: "Ask about it", kind: .ask(question: "What have I been watching and reading today?")),
-            Suggestion(id: "capture", category: "Screen memory", time: capture.isCapturing ? "on" : "off",
-                       text: capture.isCapturing
-                           ? "Capturing what you browse — \(capture.framesSent) screens so far. Screenshots are read on your Mac."
-                           : "Turn on screen memory so Lens can recall what you saw on X, YouTube and the web.",
-                       action: capture.isCapturing ? "Stop capture" : "Start capture", kind: .capture),
+                       action: "Ask about it", kind: .ask(question: "What have I been looking at recently?")),
         ]
     }
 
@@ -171,10 +162,8 @@ struct HomeView: View {
         switch item.kind {
         case .trip:
             if AccessSettings.isOn(.sharedChats) { open(item) } else { showPermission = item }
-        case .ask:
-            showMemory = true
-        case .capture:
-            capture.toggle()
+        case let .ask(question):
+            path.append(.chat(title: nil, seed: question))
         }
     }
 
@@ -224,14 +213,13 @@ private struct SuggestionRow: View {
             }
             Text(item.text).font(.body).foregroundStyle(LensDesign.ink).fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button(item.action, action: onAction).font(.subheadline).foregroundStyle(LensDesign.blue)
+                Button(item.action, action: onAction).font(.subheadline.weight(.medium)).foregroundStyle(LensDesign.blue)
                 Spacer()
-                if item.kind != .capture {
-                    Button("Not now", action: onDismiss).font(.subheadline).foregroundStyle(LensDesign.muted)
-                }
+                Button("Not now", action: onDismiss).font(.subheadline).foregroundStyle(LensDesign.muted)
             }
             .buttonStyle(.plain)
         }
-        .padding(.vertical, 22)
+        .padding(18)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: LensDesign.bubbleRadius, style: .continuous))
     }
 }

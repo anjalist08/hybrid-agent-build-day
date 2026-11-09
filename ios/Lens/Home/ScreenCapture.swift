@@ -44,9 +44,9 @@ final class ScreenCaptureController: ObservableObject {
     }
 
     var statusText: String {
-        if let uploadError, isCapturing { return "Can't reach the Lens server: \(uploadError)" }
-        if isCapturing { return "Capturing · \(framesSent) screen\(framesSent == 1 ? "" : "s") sent to your Mac" }
-        return "What you read and watch, read on your Mac"
+        if let uploadError, isCapturing { return "Not saving right now: \(uploadError)" }
+        if isCapturing { return "On · \(framesSent) screen\(framesSent == 1 ? "" : "s") remembered" }
+        return "What you read and watch, kept private to you"
     }
 }
 
@@ -109,7 +109,7 @@ struct ScreenSourcesSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Screen memory remembers").font(.headline).foregroundStyle(LensDesign.ink)
-            Text("Pick the apps Lens may learn from while capture is on. Everything else is dropped on your Mac, and switching an app off also forgets what was saved from it.")
+            Text("Pick the apps Lens may learn from while capture is on. Everything else is ignored, and switching an app off also forgets what was saved from it.")
                 .font(.footnote).foregroundStyle(LensDesign.muted)
             if sources.isEmpty {
                 Text(error ?? "Loading…").font(.footnote).foregroundStyle(error == nil ? LensDesign.muted : .red)
