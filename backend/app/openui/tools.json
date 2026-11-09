@@ -1,136 +1,561 @@
 [
   {
-    "name": "get_event",
-    "description": "Details of one event: artist, venue, date, description and price tiers per seat category.",
-    "annotations": { "readOnlyHint": true },
+    "name": "search_flights",
+    "description": "Live flight offers from Duffel (round trip when return_date is given). Pass the whole result to OfferPicker. Use IATA airport or city codes.",
+    "annotations": {
+      "readOnlyHint": true
+    },
     "inputSchema": {
       "type": "object",
-      "properties": { "event_id": { "type": "string" } },
-      "required": ["event_id"]
+      "properties": {
+        "origin": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "depart_date": {
+          "type": "string",
+          "description": "YYYY-MM-DD"
+        },
+        "return_date": {
+          "type": "string",
+          "description": "YYYY-MM-DD, optional"
+        },
+        "passengers": {
+          "type": "number"
+        },
+        "cabin_class": {
+          "type": "string",
+          "enum": [
+            "economy",
+            "premium_economy",
+            "business",
+            "first"
+          ]
+        }
+      },
+      "required": [
+        "origin",
+        "destination",
+        "depart_date",
+        "passengers"
+      ]
     },
     "outputSchema": {
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "artist": { "type": "string" },
-        "venue": { "type": "string" },
-        "city": { "type": "string" },
-        "date": { "type": "string" },
-        "doors": { "type": "string" },
-        "description": { "type": "string" },
-        "seats_available": { "type": "number" },
-        "price_tiers": {
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "duffel",
+            "simulated"
+          ]
+        },
+        "count": {
+          "type": "number"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "options": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "category": { "type": "string" },
-              "label": { "type": "string" },
-              "price": { "type": "number" },
-              "color": { "type": "string" },
-              "available": { "type": "number" }
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "subtitle": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "badge": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              }
             },
-            "required": ["category", "label", "price", "color", "available"]
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "subtitle",
+              "detail",
+              "price",
+              "currency",
+              "badge",
+              "image"
+            ]
           }
         }
       }
     }
   },
   {
-    "name": "get_seats",
-    "description": "Live seat map of an event: every seat with its position, section, row, status and price. Pass the whole result to SeatMap.",
-    "annotations": { "readOnlyHint": true },
+    "name": "get_seat_map",
+    "description": "Seat map of the first outbound flight of an offer. Pass the whole result to CabinSeatMap. available=false when the airline has no seat selection.",
+    "annotations": {
+      "readOnlyHint": true
+    },
     "inputSchema": {
       "type": "object",
-      "properties": { "event_id": { "type": "string" } },
-      "required": ["event_id"]
+      "properties": {
+        "offer_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "offer_id"
+      ]
     },
     "outputSchema": {
       "type": "object",
       "properties": {
-        "event_id": { "type": "string" },
-        "width": { "type": "number" },
-        "height": { "type": "number" },
-        "stage": { "type": "string" },
-        "categories": {
+        "offer_id": {
+          "type": "string"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "aisles": {
+          "type": "number"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "currency": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "search_stays",
+    "description": "Hotels near a point for the trip dates. Pass the whole result to OfferPicker. You must supply latitude/longitude of the destination city.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        },
+        "check_in": {
+          "type": "string",
+          "description": "YYYY-MM-DD"
+        },
+        "check_out": {
+          "type": "string",
+          "description": "YYYY-MM-DD"
+        },
+        "guests": {
+          "type": "number"
+        },
+        "rooms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "city",
+        "latitude",
+        "longitude",
+        "check_in",
+        "check_out",
+        "guests"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "duffel",
+            "simulated"
+          ]
+        },
+        "count": {
+          "type": "number"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "options": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "key": { "type": "string" },
-              "label": { "type": "string" },
-              "color": { "type": "string" },
-              "price": { "type": "number" }
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "subtitle": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "badge": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              }
             },
-            "required": ["key", "label", "color", "price"]
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "subtitle",
+              "detail",
+              "price",
+              "currency",
+              "badge",
+              "image"
+            ]
           }
+        }
+      }
+    }
+  },
+  {
+    "name": "search_cars",
+    "description": "Rental cars at the destination for the trip dates. Pass the whole result to OfferPicker.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        },
+        "pickup_date": {
+          "type": "string"
+        },
+        "dropoff_date": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "city",
+        "latitude",
+        "longitude",
+        "pickup_date",
+        "dropoff_date"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "duffel",
+            "simulated"
+          ]
+        },
+        "count": {
+          "type": "number"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "subtitle": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "badge": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "subtitle",
+              "detail",
+              "price",
+              "currency",
+              "badge",
+              "image"
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "price_trip",
+    "description": "Running total for the current choices. Re-runs automatically when its $binding args change.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "flight_id": {
+          "type": "string"
+        },
+        "stay_id": {
+          "type": "string"
+        },
+        "car_id": {
+          "type": "string"
         },
         "seats": {
           "type": "array",
           "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": []
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "section": { "type": "string" },
-              "row": { "type": "string" },
-              "seat": { "type": "string" },
-              "x": { "type": "number" },
-              "y": { "type": "number" },
-              "category": { "type": "string" },
-              "price": { "type": "number" },
-              "status": { "type": "string", "enum": ["free", "held", "booked"] }
+              "left": {
+                "type": "string"
+              },
+              "right": {
+                "type": "string"
+              }
             },
-            "required": ["id", "section", "row", "seat", "x", "y", "category", "price", "status"]
+            "required": [
+              "left",
+              "right"
+            ]
+          }
+        },
+        "total": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "book_trip",
+    "description": "Pay and book everything chosen: the flight (with seats) as a Duffel order paid from the test balance, then the stay and the car. Write operation — use with Mutation().",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "flight_id": {
+          "type": "string"
+        },
+        "travelers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "full names, lead traveler first"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "stay_id": {
+          "type": "string"
+        },
+        "car_id": {
+          "type": "string"
+        },
+        "seats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "flight_id",
+        "travelers",
+        "email"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "trip_id": {
+          "type": "string"
+        },
+        "total": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "flight": {
+          "type": "object",
+          "properties": {
+            "reference": {
+              "type": "string"
+            },
+            "airline": {
+              "type": "string"
+            },
+            "amount": {
+              "type": "string"
+            }
+          }
+        },
+        "stay": {
+          "type": "object",
+          "properties": {
+            "reference": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "car": {
+          "type": "object",
+          "properties": {
+            "reference": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
           }
         }
       }
     }
   },
   {
-    "name": "hold_seats",
-    "description": "Hold the selected seats for 10 minutes so nobody else can take them during checkout. Write operation — use with Mutation().",
+    "name": "notify_friends",
+    "description": "Opens Messages on the phone with the itinerary pre-filled for the friends. Write operation — use with Mutation().",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "event_id": { "type": "string" },
-        "seats": { "type": "array", "items": { "type": "string" } }
+        "friends": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "type": "string"
+        }
       },
-      "required": ["event_id", "seats"]
+      "required": [
+        "friends",
+        "message"
+      ]
     },
     "outputSchema": {
       "type": "object",
       "properties": {
-        "hold_token": { "type": "string" },
-        "expires_at": { "type": "string" },
-        "seats": { "type": "array", "items": { "type": "string" } },
-        "subtotal": { "type": "number" },
-        "fees": { "type": "number" },
-        "total": { "type": "number" },
-        "message": { "type": "string" }
-      }
-    }
-  },
-  {
-    "name": "book_seats",
-    "description": "Pay for and book held seats (demo payment, no card is charged). Write operation — use with Mutation().",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "event_id": { "type": "string" },
-        "hold_token": { "type": "string" },
-        "name": { "type": "string" },
-        "email": { "type": "string" }
-      },
-      "required": ["event_id", "hold_token", "name", "email"]
-    },
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "order_id": { "type": "string" },
-        "seats": { "type": "array", "items": { "type": "string" } },
-        "total": { "type": "number" },
-        "message": { "type": "string" }
+        "status": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
       }
     }
   }

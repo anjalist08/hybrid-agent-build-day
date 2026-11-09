@@ -19,7 +19,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import agent, debug, kb, ticketing
+from . import agent, debug, kb, travel
 from .config import settings
 from .db import DB
 from .extract import dhash, extract, hamming
@@ -221,7 +221,7 @@ def wipe() -> dict:
     return {"ok": True}
 
 
-# ---------------------------------------------------------------- OpenUI agent (tickets demo)
+# ---------------------------------------------------------------- OpenUI agent (trip planning + booking)
 
 
 class ChatMessage(BaseModel):
@@ -252,11 +252,7 @@ def call_tool(name: str, args: dict = Body(default_factory=dict)):
     """Query()/Mutation() calls from the generated UI. Errors come back as 400 {error}."""
     try:
         return agent.run_ui_tool(name, args)
-    except ticketing.TicketingError as e:
+    except travel.TravelError as e:
         log.info("tool %s failed: %s", name, e)
         return JSONResponse({"error": str(e)}, status_code=400)
 
-
-@app.get("/events")
-def list_events() -> list[dict]:
-    return ticketing.find_events("")

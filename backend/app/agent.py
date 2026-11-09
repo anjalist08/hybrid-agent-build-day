@@ -1,5 +1,5 @@
-"""The OpenUI agent: Claude reads what a friend sent, finds the event with server-side tools,
-then streams an OpenUI Lang program (event card, SeatMap, hold, checkout) to the app.
+"""The OpenUI agent: Claude reads a friends' group chat or email, pieces together the trip, and
+streams OpenUI Lang screens: the trip plan to confirm, then flights + seats + stay + car + payment.
 
 Wire format to the app: Server-Sent Events, one JSON object per `data:` line —
   {"type": "status", "status": "thinking" | "tool" | "writing", "tool"?: str}
@@ -7,7 +7,7 @@ Wire format to the app: Server-Sent Events, one JSON object per `data:` line —
   {"type": "reset"}                    discard streamed text (a turn was re-issued)
   {"type": "done", "stop_reason": str}
   {"type": "error", "message": str}
-Write operations (hold/book) never run here: the generated UI calls them through /tools.
+Live data and bookings never run here: the generated UI calls them through /tools (Query/Mutation).
 """
 
 import json
@@ -19,7 +19,7 @@ from pathlib import Path
 
 import anthropic
 
-from . import ticketing
+from . import travel
 from .config import settings
 
 log = logging.getLogger("lens.agent")
@@ -27,24 +27,8 @@ log = logging.getLogger("lens.agent")
 PROMPT_PATH = Path(__file__).parent / "openui" / "system-prompt.md"
 MAX_TOOL_ROUNDS = 3
 
-# Read-only tools the model may call before writing UI.
-MODEL_TOOLS = [
-    {
-        "name": "find_event",
-        "description": "Find which event a message, email or link is about. Pass the user's text verbatim. "
-                       "Returns candidate events with ids, best match first (match_score 0 = no real match).",
-        "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"],
-                         "additionalProperties": False},
-        "eager_input_streaming": True,
-    },
-    {
-        "name": "get_event",
-        "description": "Details of one event: date, venue, description, price tiers and seats left.",
-        "input_schema": {"type": "object", "properties": {"event_id": {"type": "string"}}, "required": ["event_id"],
-                         "additionalProperties": False},
-        "eager_input_streaming": True,
-    },
-]
+# Server-side tools the model may call before writing UI (none needed: the UI fetches live data).
+MODEL_TOOLS: list[dict] = []
 
 _client: anthropic.Anthropic | None = None
 
@@ -57,17 +41,7 @@ def _claude() -> anthropic.Anthropic:
 
 
 def _run_model_tool(name: str, args: object) -> tuple[str, bool]:
-    """Returns (content, is_error). Inputs are validated here because eager streaming skips it."""
-    if not isinstance(args, dict):
-        return json.dumps({"INVALID_JSON": str(args)}), True
-    try:
-        if name == "find_event" and isinstance(args.get("text"), str):
-            return json.dumps(ticketing.find_events(args["text"])), False
-        if name == "get_event" and isinstance(args.get("event_id"), str):
-            return json.dumps(ticketing.get_event(args["event_id"])), False
-        return f"Invalid arguments for {name}: {json.dumps(args)}", True
-    except ticketing.TicketingError as e:
-        return str(e), True
+    return f"Unknown tool {name}", True
 
 
 def _system() -> list[dict]:
@@ -75,7 +49,7 @@ def _system() -> list[dict]:
     return [
         # The generated prompt is ~70 KB and identical on every request: cache it.
         {"type": "text", "text": PROMPT_PATH.read_text(), "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": f"Today is {today}. The user is in the San Francisco Bay Area. "
+        {"type": "text", "text": f"Today is {today}. The user lives in San Francisco (home airport SFO). "
                                  "Answer with OpenUI Lang only (no Markdown fences, no prose outside the program)."},
     ]
 
@@ -106,9 +80,9 @@ def stream(messages: list[dict], effort: str = "low") -> Iterator[dict]:
                 max_tokens=32000,
                 output_config={"effort": effort},
                 system=_system(),
-                tools=MODEL_TOOLS,
-                # After a few lookups, answer with what we have.
-                tool_choice={"type": "auto" if round_ < MAX_TOOL_ROUNDS else "none"},
+                **({"tools": MODEL_TOOLS,
+                    # After a few lookups, answer with what we have.
+                    "tool_choice": {"type": "auto" if round_ < MAX_TOOL_ROUNDS else "none"}} if MODEL_TOOLS else {}),
                 messages=conversation,
                 extra_headers={"anthropic-beta": "server-side-fallback-2026-07-01"},
                 extra_body={"fallbacks": "default"},
@@ -161,10 +135,13 @@ def stream(messages: list[dict], effort: str = "low") -> Iterator[dict]:
 
 def run_ui_tool(name: str, args: dict) -> dict:
     """Tools the generated UI calls through Query()/Mutation() (via POST /tools/{name})."""
-    fn = ticketing.TOOLS.get(name)
+    if name == "notify_friends":
+        # Normally handled on the phone (opens Messages); this is the fallback for other clients.
+        return {"status": "ok", "message": args.get("message", "")}
+    fn = travel.TOOLS.get(name)
     if fn is None:
-        raise ticketing.TicketingError(f"Unknown tool '{name}'. Available: {', '.join(ticketing.TOOLS)}")
+        raise travel.TravelError(f"Unknown tool '{name}'. Available: {', '.join(travel.TOOLS)}")
     try:
         return fn(**args)
     except TypeError as e:
-        raise ticketing.TicketingError(f"Bad arguments for {name}: {e}") from e
+        raise travel.TravelError(f"Bad arguments for {name}: {e}") from e

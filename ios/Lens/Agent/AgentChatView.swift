@@ -51,7 +51,7 @@ final class AgentStore {
 
         isBusy = true
         reply.isStreaming = true
-        reply.status = "Reading the message…"
+        reply.status = "Reading the conversation…"
         task = Task { [weak self] in
             await self?.stream(history: Array(history), into: reply)
         }
@@ -96,8 +96,8 @@ final class AgentStore {
                 case "status":
                     switch event["status"] as? String {
                     case "thinking": reply.status = "Thinking…"
-                    case "tool": reply.status = (event["tool"] as? String) == "find_event" ? "Finding the event…" : "Checking seats…"
-                    default: reply.status = "Building your tickets screen…"
+                    case "tool": reply.status = "Looking things up…"
+                    default: reply.status = "Putting your trip together…"
                     }
                 case "delta":
                     reply.program += event["text"] as? String ?? ""
@@ -124,10 +124,20 @@ struct AgentChatView: View {
     @State private var draft = ""
     @FocusState private var inputFocused: Bool
 
-    /// Demo inputs: what a friend might send. The last one has no matching event on purpose.
+    /// Demo inputs: trips friends plan ad hoc over group chats and email.
     private let samples = [
-        "Alex: yo Midnight Static is playing the Fillmore Dec 12!! we HAVE to go, grab us 2 seats?",
-        "Sam: Harbor Lights at the Fox in Oakland on the 19th? I'm in if you are 🎶",
+        """
+        Group chat "Ski squad ⛷️"
+        Alex: ok we're actually doing Tahoe this time 😤
+        Sam: MLK weekend? I can do Fri Jan 15 – Mon Jan 18
+        Alex: yes!! Palisades. I want a place near the lifts
+        Sam: we'll need a car from Reno, I'm not driving 4 hrs from SF
+        Alex: someone book it before we chicken out 😂
+        """,
+        """
+        Email from Priya — Subject: Austin for my birthday?!
+        Hey! Thinking Austin Mar 5–8 for my 30th. Me, you and Jordan flying from SF.         Somewhere walkable near South Congress, and a car for a day trip to Hill Country wineries. You in?
+        """,
     ]
 
     var body: some View {
@@ -162,8 +172,16 @@ struct AgentChatView: View {
             #if DEBUG
             .task {
                 // Simulator screenshots: `--agent-autosend` sends the first sample message.
-                if ProcessInfo.processInfo.arguments.contains("--agent-autosend"), store.turns.isEmpty {
+                let args = ProcessInfo.processInfo.arguments
+                if args.contains("--agent-autosend"), store.turns.isEmpty {
                     store.send(display: samples[0])
+                    // `--agent-autoconfirm` also taps "Looks good" once the plan has streamed.
+                    if args.contains("--agent-autoconfirm") {
+                        try? await Task.sleep(for: .seconds(2))
+                        while store.isBusy { try? await Task.sleep(for: .milliseconds(300)) }
+                        store.send(display: "Looks good — find flights, stays & cars",
+                                   content: "Confirm the plan and find options")
+                    }
                 }
             }
             #endif
@@ -183,14 +201,15 @@ struct AgentChatView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Got an invite?").font(.title2.bold())
-            Text("Paste what a friend sent you — a text, an email, a link — and Lens finds the event, shows you the seats and gets you through checkout.")
+            Text("Planning a trip with friends?").font(.title2.bold())
+            Text("Paste the group chat or email. Lens pieces together the plan, then books flights with seats, a stay and a car — and lets your friends know.")
                 .foregroundStyle(.secondary)
             ForEach(samples, id: \.self) { sample in
                 Button { store.send(display: sample) } label: {
                     HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "message.fill").foregroundStyle(.green)
-                        Text(sample).multilineTextAlignment(.leading).foregroundStyle(.primary)
+                        Image(systemName: sample.hasPrefix("Email") ? "envelope.fill" : "message.fill")
+                            .foregroundStyle(sample.hasPrefix("Email") ? .blue : .green)
+                        Text(sample).font(.subheadline).multilineTextAlignment(.leading).foregroundStyle(.primary)
                         Spacer(minLength: 0)
                     }
                     .padding(12)
@@ -211,7 +230,7 @@ struct AgentChatView: View {
             .accessibilityLabel("Paste from clipboard")
             .disabled(store.isBusy)
 
-            TextField("Paste or type a message…", text: $draft, axis: .vertical)
+            TextField("Paste a group chat or email…", text: $draft, axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
                 .focused($inputFocused)
