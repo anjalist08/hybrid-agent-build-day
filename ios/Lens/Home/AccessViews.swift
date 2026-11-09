@@ -73,6 +73,8 @@ struct AppAccessView: View {
                 .padding(.vertical, 6)
                 .background(LensDesign.surface, in: RoundedRectangle(cornerRadius: LensDesign.bubbleRadius, style: .continuous))
 
+                ScreenSourcesSection().padding(.top, 20)
+
                 Text("All sources start off. Screen memory uses iOS screen broadcast — stop it anytime from the red status pill. Screenshots and chats are read on your devices; only the details a task needs go online.")
                     .font(.footnote).foregroundStyle(LensDesign.muted).padding(.top, 8)
 

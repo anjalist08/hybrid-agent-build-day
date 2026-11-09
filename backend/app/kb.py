@@ -8,6 +8,7 @@ import re
 import time
 from urllib.parse import quote_plus
 
+from . import sources
 from .config import settings
 from .db import DB, row_topics
 from .schemas import FrameObservation, VisibleItem
@@ -19,7 +20,8 @@ def _norm(s: str | None) -> str:
 
 _APP_ALIASES = {"twitter": "X", "x": "X", "x (twitter)": "X", "youtube": "YouTube", "medium": "Medium",
                 "safari": "Safari", "chrome": "Chrome", "google chrome": "Chrome", "google": "Google",
-                "instagram": "Instagram", "reddit": "Reddit", "linkedin": "LinkedIn", "tiktok": "TikTok"}
+                "instagram": "Instagram", "insta": "Instagram", "reddit": "Reddit", "linkedin": "LinkedIn",
+                "tiktok": "TikTok", "facebook": "Facebook", "fb": "Facebook", "threads": "Threads"}
 
 
 def _norm_app(app: str) -> str:
@@ -70,7 +72,14 @@ _JUNK_TITLE = re.compile(r"^[\d:.,\s]*[kmb]?\s*(views?|ago|watching|likes?)?\s*$
 
 
 def is_ignored_app(app: str) -> bool:
-    return _norm(app) in settings.ignore_apps
+    return blocked_reason(app) is not None
+
+
+def blocked_reason(app: str) -> str | None:
+    """Why this app's screens aren't indexed: our own UI, or a source switched off in Settings."""
+    if _norm(app) in settings.ignore_apps:
+        return f"'{app}' is Lens or system UI"
+    return sources.blocked_reason(app)
 
 
 def is_junk_title(title: str) -> bool:

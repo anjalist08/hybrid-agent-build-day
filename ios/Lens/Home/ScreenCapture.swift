@@ -91,3 +91,83 @@ struct ScreenCaptureRow: View {
         .background(ScreenCaptureHost(controller: controller).frame(width: 1, height: 1), alignment: .topLeading)
     }
 }
+
+/// "Screen memory remembers": per-app switches, stored and enforced on the Lens server
+/// (screens from switched-off apps are dropped before anything is indexed).
+struct ScreenSourcesSection: View {
+    struct Source: Decodable, Identifiable {
+        let key: String
+        let label: String
+        let group: String
+        var enabled: Bool
+        var id: String { key }
+    }
+
+    @State private var sources: [Source] = []
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Screen memory remembers").font(.headline).foregroundStyle(LensDesign.ink)
+            Text("Pick the apps Lens may learn from while capture is on. Everything else is dropped on your Mac.")
+                .font(.footnote).foregroundStyle(LensDesign.muted)
+            if sources.isEmpty {
+                Text(error ?? "Loading…").font(.footnote).foregroundStyle(error == nil ? LensDesign.muted : .red)
+                    .padding(.vertical, 8)
+            }
+            ForEach(groups, id: \.self) { group in
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(group.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(LensDesign.muted)
+                        .padding(.top, 12).padding(.bottom, 2)
+                    ForEach(sources.filter { $0.group == group }) { source in
+                        Toggle(source.label, isOn: binding(for: source.key))
+                            .tint(LensDesign.blue)
+                            .padding(.vertical, 8)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 6)
+            .background(LensDesign.surface, in: RoundedRectangle(cornerRadius: LensDesign.bubbleRadius, style: .continuous))
+        }
+        .task { await load() }
+    }
+
+    private var groups: [String] {
+        sources.map(\.group).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+    }
+
+    private func binding(for key: String) -> Binding<Bool> {
+        Binding(
+            get: { sources.first { $0.key == key }?.enabled ?? false },
+            set: { value in
+                if let i = sources.firstIndex(where: { $0.key == key }) { sources[i].enabled = value }
+                Task { await save([key: value]) }
+            }
+        )
+    }
+
+    private func load() async {
+        do {
+            let (data, _) = try await URLSession.shared.data(from: SharedConfig.backendURL.appendingPathComponent("settings/sources"))
+            sources = try JSONDecoder().decode([Source].self, from: data)
+            error = nil
+        } catch {
+            self.error = "Can't reach the Lens server to load these settings."
+        }
+    }
+
+    private func save(_ changes: [String: Bool]) async {
+        var request = URLRequest(url: SharedConfig.backendURL.appendingPathComponent("settings/sources"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: changes)
+        if let (data, _) = try? await URLSession.shared.data(for: request),
+           let updated = try? JSONDecoder().decode([Source].self, from: data) {
+            sources = updated
+        } else {
+            error = "Couldn't save — is the Lens server running?"
+            await load()
+        }
+    }
+}

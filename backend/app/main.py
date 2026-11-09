@@ -19,7 +19,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import agent, debug, kb, travel
+from . import agent, debug, kb, sources, travel
 from .config import settings
 from .db import DB
 from .extract import dhash, extract, hamming
@@ -79,8 +79,8 @@ def process(job: Job) -> bool:
             (job.ts, job.device, job.hash, obs.app, obs.screen_kind, int(obs.sensitive), result.label,
              None if obs.sensitive else obs.model_dump_json()),
         )
-        if kb.is_ignored_app(obs.app):
-            ignored_reason = f"app '{obs.app}' is in LENS_IGNORE_APPS"
+        ignored_reason = kb.blocked_reason(obs.app)
+        if ignored_reason:
             stats["ignored"] += 1
         touched = kb.record_observation(db, obs, job.ts)
     # Dwell from following duplicate frames goes to what this frame showed (nothing, if it failed).
@@ -256,3 +256,17 @@ def call_tool(name: str, args: dict = Body(default_factory=dict)):
         log.info("tool %s failed: %s", name, e)
         return JSONResponse({"error": str(e)}, status_code=400)
 
+
+
+# ---------------------------------------------------------------- screen memory sources
+
+
+@app.get("/settings/sources")
+def get_sources() -> list[dict]:
+    return sources.get_sources()
+
+
+@app.post("/settings/sources")
+def set_sources(changes: dict[str, bool] = Body(...)) -> list[dict]:
+    """Body: {"instagram": true, "messages": false, ...}"""
+    return sources.set_sources(changes)

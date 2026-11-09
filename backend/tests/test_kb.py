@@ -87,3 +87,20 @@ def test_question_naming_an_app_retrieves_that_apps_items():
         kb.record_observation(db, _obs(app="X", title=f"activity post number {i}", author=f"@u{i}"), 2000.0 + i)
     hits = kb.search(db, "Ok tell me about my YouTube activity")
     assert any(h["app"] == "YouTube" for h in hits)
+
+
+def test_sources_allowlist(tmp_path, monkeypatch):
+    from app import sources
+    monkeypatch.setattr(sources, "_state", None)
+    monkeypatch.setattr(sources, "_path", lambda: tmp_path / "sources.json")
+    assert sources.source_for("Twitter") == "x" and sources.source_for("X") == "x"
+    assert sources.source_for("Instagram") == "instagram" and sources.source_for("Facebook") == "facebook"
+    assert sources.source_for("iMessage") == "messages" and sources.source_for("Calculator") == "other"
+    assert kb.blocked_reason("Instagram") is None
+    assert "Messages" in kb.blocked_reason("iMessage")
+    db = DB(":memory:")
+    assert kb.record_observation(db, _obs(app="iMessage", title="see you at 7"), 1000.0) == []
+    sources.set_sources({"messages": True})
+    assert len(kb.record_observation(db, _obs(app="iMessage", title="see you at 7"), 1000.0)) == 1
+    sources.set_sources({"instagram": False})
+    assert kb.blocked_reason("Instagram") is not None
