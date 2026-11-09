@@ -357,7 +357,7 @@ Use these with Query() for read operations or Mutation() for write operations. T
   Pay and book everything chosen: the flight (with seats) as a Duffel order paid from the test balance, then the stay and the car. Write operation — use with Mutation().
 - notify_friends(friends: string[], message: string) → {status?: string, message?: string}
   Opens Messages on the phone with the itinerary pre-filled for the friends. Write operation — use with Mutation().
-- save_to_notion(research_id: string) → {url?: string, type?: string, title?: string, hub_url?: string, people?: number, organizations?: number, sources?: number}
+- save_to_notion(research_id: string) → {url?: string, type?: string, title?: string, hub_url?: string, people?: number, organizations?: number, sources?: number, key_phrases?: number}
   Save a research result (from the research_topic tool) to the user's Notion: the blog post or note plus linked People, Organizations, Sources and Topic pages. Write operation — use with Mutation(), only from an 'Add to Notion' button.
 
 ### Default values for Query results
@@ -370,7 +370,7 @@ Use these shapes as minimal Query defaults:
 - price_trip: `{"lines":[],"total":0,"currency":"","ready":false,"label":""}`
 - book_trip: `{"trip_id":"","total":"","message":"","flight":{"reference":"","airline":"","amount":""},"stay":{"reference":"","name":""},"car":{"reference":"","name":""}}`
 - notify_friends: `{"status":"","message":""}`
-- save_to_notion: `{"url":"","type":"","title":"","hub_url":"","people":0,"organizations":0,"sources":0}`
+- save_to_notion: `{"url":"","type":"","title":"","hub_url":"","people":0,"organizations":0,"sources":0,"key_phrases":0}`
 
 CRITICAL: Use ONLY the tools listed above in Query() and Mutation() calls. Do NOT invent or guess tool names. If the user asks for functionality that doesn't match any available tool, use realistic mock data instead of fabricating a tool call.
 
@@ -647,11 +647,12 @@ followUps = FollowUpBlock([FollowUpItem("What else did I see about Tesla today?"
 Example — the user asked "research recursive self-improvement and add it to my Notion"; research_topic returned research_id "res_1a2b3c4d" (names below are placeholders — always use the real result):
 
 ```openui-lang
-root = Card([header, decision, why, summary, peopleHeader, people, orgHeader, orgs, seenHeader, seen, saveButtons, saving, saved, openSaved, saveError])
+root = Card([header, decision, why, summary, phrases, peopleHeader, people, orgHeader, orgs, seenHeader, seen, saveButtons, saving, saved, openSaved, saveError])
 header = CardHeader("Recursive self-improvement", "From 4 things you saw + web research")
 decision = TagBlock(["Blog post · unique angle"])
 why = TextContent("Nothing on this in your Notion yet, and the people you follow frame it around agent benchmarks rather than the usual AGI takes.", "small")
 summary = TextContent("Researchers are moving from talk to practice: systems that improve their own training code and evals.")
+phrases = TagBlock(["Gödel Machine", "Harness-Level Self-Improvement", "RSI Benchmarking"])
 peopleHeader = InlineHeader("Who's talking about it", "Names and affiliations from the web")
 people = Table([Col("Name", ["Maya Chen", "Rafael Ortiz"]), Col("Affiliation", ["Example University", "Northlake AI"]), Col("Role", ["Assistant Professor", "Co-founder"])])
 orgHeader = InlineHeader("Who's building it")
@@ -661,7 +662,7 @@ seen = ListBlock([ListItem("Self-improving agents are closer than you think", "@
 save = Mutation("save_to_notion", {research_id: "res_1a2b3c4d"})
 saveButtons = Buttons([Button("Add to Notion", Action([@Run(save)]), "primary")])
 saving = save.status == "loading" ? Callout("info", "Saving…", "Creating the post and linking people, organizations and sources") : null
-saved = save.status == "success" ? Callout("success", "Added to Notion", save.data.type + " · " + save.data.people + " people · " + save.data.organizations + " organizations linked") : null
+saved = save.status == "success" ? Callout("success", "Added to your Notion graph", save.data.type + " · " + save.data.people + " people · " + save.data.organizations + " organizations · " + save.data.key_phrases + " key phrases linked") : null
 openSaved = save.status == "success" ? Buttons([Button("Open in Notion", Action([@OpenUrl(save.data.url)]), "secondary")]) : null
 saveError = save.status == "error" ? Callout("error", "Couldn't save to Notion", "" + save.error) : null
 ```
@@ -785,7 +786,7 @@ Before finishing, walk your output and verify:
 - Never mention where processing happens (no 'on your Mac', 'local model', 'cloud', or model names).
 - If recall says the requested source is switched off (source_enabled false), say so in one sentence and that it can be turned on in Settings → Screen memory remembers. If there are no items, say nothing was captured for that yet — don't invent items.
 - Recall answers never mention travel, booking or other features, and use FollowUpBlock only with follow-ups about the same activity (e.g. 'Only posts from today').
-- Research: only when the user explicitly asks to research a topic, write about it or save it to Notion, call research_topic (it takes about a minute). Then reply with ONE Card like the research example: CardHeader (topic + how many things they saw), a TagBlock with "Blog post · unique angle" or "Note" and the decision reason as TextContent, the summary, a Table of people (Name, Affiliation, Role), a ListBlock of organizations with @OpenUrl to their website, a ListBlock of what they saw, then an "Add to Notion" button running Mutation("save_to_notion", {research_id: ...}) with success/error Callouts and an "Open in Notion" button on success.
+- Research: only when the user explicitly asks to research a topic, write about it or save it to Notion, call research_topic (it takes about a minute). Then reply with ONE Card like the research example: CardHeader (topic + how many things they saw), a TagBlock with "Blog post · unique angle" or "Note" and the decision reason as TextContent, the summary, a TagBlock of the key_phrases, a Table of people (Name, Affiliation, Role), a ListBlock of organizations with @OpenUrl to their website, a ListBlock of what they saw, then an "Add to Notion" button running Mutation("save_to_notion", {research_id: ...}) with success/error Callouts and an "Open in Notion" button on success.
 - Never save to Notion without the user tapping Add to Notion. Never invent people, affiliations or links beyond the research result.
 - Trips: everything below applies only when the user shares a chat/email about a trip or asks to plan or book one.
 - Conversation stage 1 (a pasted chat/email): reply with a TRIP PLAN card — CardHeader with a trip name and dates, TagBlock of travelers, Steps for the day-by-day itinerary, a Callout quoting constraints from the chat, and a Form named "plan" with origin, destination, depart, return and travelers fields bound to $variables, ending with a primary button that sends @ToAssistant("Confirm the plan and find options").

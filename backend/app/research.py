@@ -13,7 +13,7 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel, Field
 
-from . import kb, notion
+from . import kb, notion, notion_graph
 from .config import settings
 from .db import DB
 
@@ -46,6 +46,11 @@ class Source(BaseModel):
     author: str | None = Field(description="Exact name from `people` if the author is one of them")
 
 
+class KeyPhrase(BaseModel):
+    phrase: str = Field(description="A short concept or term people use for this topic, e.g. 'Gödel machine'")
+    meaning: str = Field(description="One line on what it means here")
+
+
 class Section(BaseModel):
     heading: str
     paragraphs: list[str]
@@ -58,6 +63,7 @@ class Research(BaseModel):
     decision_reason: str = Field(description="One sentence on why this is a blog post (unique angle) or a note")
     summary: str = Field(description="2-3 sentence summary")
     key_takeaways: list[str]
+    key_phrases: list[KeyPhrase] = Field(description="3-6 key phrases / concepts that connect this topic to others")
     sections: list[Section]
     people: list[Person]
     organizations: list[Organization]
@@ -104,7 +110,7 @@ Be brief: short bullet notes with every URL you rely on. Do not invent people, a
 def research_topic(db: DB, topic: str) -> dict:
     start = time.perf_counter()
     seen = kb.recall(db, topic, limit=25)["items"]
-    existing = notion.existing_writing_titles()
+    existing = notion_graph.existing_titles()
     notes = _web_research(topic, seen)
     web_ms = int((time.perf_counter() - start) * 1000)
 
@@ -126,6 +132,7 @@ Decide the format:
   rehash of a well-known topic (e.g. it connects what they saw with who is working on it in a fresh way).
   Then write 2 short sections of 1-2 paragraphs each, in a clear first-person blog voice (brief — this is a draft).
 - Otherwise "note": 1 short section of 2-4 one-line paragraphs, for the user to build on later.
+Add 3-6 key phrases: the concepts and terms people use for this topic (reusable across topics, title case).
 Keep everything concise: at most 3 key takeaways, at most 4 people, at most 3 organizations, at most 5 sources.
 People must be real and come from the notes or the seen items; keep only those with a known affiliation or
 clear relevance. Sources are the items the user actually saw (with their links), plus at most 3 key web sources."""}],
@@ -135,6 +142,9 @@ clear relevance. Sources are the items the user actually saw (with their links),
     result = resp.parsed_output.model_dump()
     rid = "res_" + secrets.token_hex(4)
     _results[rid] = result
+    out = settings.data_dir / "research"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{rid}.json").write_text(json.dumps(result, indent=2, ensure_ascii=False))
     ms = int((time.perf_counter() - start) * 1000)
     db.log_route("research", "cloud", settings.claude_model, ms, True,
                  f"{len(seen)} memory items as text + web search ({web_ms} ms), 0 images")
@@ -146,5 +156,8 @@ clear relevance. Sources are the items the user actually saw (with their links),
 def save_to_notion(research_id: str) -> dict:
     research = _results.get(research_id)
     if research is None:
-        raise notion.NotionError("That research expired (server restarted). Ask me to research it again.")
-    return notion.save_research(research)
+        path = settings.data_dir / "research" / f"{research_id}.json"
+        if not path.exists():
+            raise notion.NotionError("I can't find that research anymore. Ask me to research it again.")
+        research = json.loads(path.read_text())
+    return notion_graph.save(research)

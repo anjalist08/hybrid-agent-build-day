@@ -60,7 +60,7 @@ let rules = [
     "Never mention where processing happens (no 'on your Mac', 'local model', 'cloud', or model names).",
     "If recall says the requested source is switched off (source_enabled false), say so in one sentence and that it can be turned on in Settings → Screen memory remembers. If there are no items, say nothing was captured for that yet — don't invent items.",
     "Recall answers never mention travel, booking or other features, and use FollowUpBlock only with follow-ups about the same activity (e.g. 'Only posts from today').",
-    "Research: only when the user explicitly asks to research a topic, write about it or save it to Notion, call research_topic (it takes about a minute). Then reply with ONE Card like the research example: CardHeader (topic + how many things they saw), a TagBlock with \"Blog post · unique angle\" or \"Note\" and the decision reason as TextContent, the summary, a Table of people (Name, Affiliation, Role), a ListBlock of organizations with @OpenUrl to their website, a ListBlock of what they saw, then an \"Add to Notion\" button running Mutation(\"save_to_notion\", {research_id: ...}) with success/error Callouts and an \"Open in Notion\" button on success.",
+    "Research: only when the user explicitly asks to research a topic, write about it or save it to Notion, call research_topic (it takes about a minute). Then reply with ONE Card like the research example: CardHeader (topic + how many things they saw), a TagBlock with \"Blog post · unique angle\" or \"Note\" and the decision reason as TextContent, the summary, a TagBlock of the key_phrases, a Table of people (Name, Affiliation, Role), a ListBlock of organizations with @OpenUrl to their website, a ListBlock of what they saw, then an \"Add to Notion\" button running Mutation(\"save_to_notion\", {research_id: ...}) with success/error Callouts and an \"Open in Notion\" button on success.",
     "Never save to Notion without the user tapping Add to Notion. Never invent people, affiliations or links beyond the research result.",
     "Trips: everything below applies only when the user shares a chat/email about a trip or asks to plan or book one.",
     "Conversation stage 1 (a pasted chat/email): reply with a TRIP PLAN card — CardHeader with a trip name and dates, TagBlock of travelers, Steps for the day-by-day itinerary, a Callout quoting constraints from the chat, and a Form named \"plan\" with origin, destination, depart, return and travelers fields bound to $variables, ending with a primary button that sends @ToAssistant(\"Confirm the plan and find options\").",
@@ -94,11 +94,12 @@ let researchExample = #"""
 Example — the user asked "research recursive self-improvement and add it to my Notion"; research_topic returned research_id "res_1a2b3c4d" (names below are placeholders — always use the real result):
 
 ```openui-lang
-root = Card([header, decision, why, summary, peopleHeader, people, orgHeader, orgs, seenHeader, seen, saveButtons, saving, saved, openSaved, saveError])
+root = Card([header, decision, why, summary, phrases, peopleHeader, people, orgHeader, orgs, seenHeader, seen, saveButtons, saving, saved, openSaved, saveError])
 header = CardHeader("Recursive self-improvement", "From 4 things you saw + web research")
 decision = TagBlock(["Blog post · unique angle"])
 why = TextContent("Nothing on this in your Notion yet, and the people you follow frame it around agent benchmarks rather than the usual AGI takes.", "small")
 summary = TextContent("Researchers are moving from talk to practice: systems that improve their own training code and evals.")
+phrases = TagBlock(["Gödel Machine", "Harness-Level Self-Improvement", "RSI Benchmarking"])
 peopleHeader = InlineHeader("Who's talking about it", "Names and affiliations from the web")
 people = Table([Col("Name", ["Maya Chen", "Rafael Ortiz"]), Col("Affiliation", ["Example University", "Northlake AI"]), Col("Role", ["Assistant Professor", "Co-founder"])])
 orgHeader = InlineHeader("Who's building it")
@@ -108,7 +109,7 @@ seen = ListBlock([ListItem("Self-improving agents are closer than you think", "@
 save = Mutation("save_to_notion", {research_id: "res_1a2b3c4d"})
 saveButtons = Buttons([Button("Add to Notion", Action([@Run(save)]), "primary")])
 saving = save.status == "loading" ? Callout("info", "Saving…", "Creating the post and linking people, organizations and sources") : null
-saved = save.status == "success" ? Callout("success", "Added to Notion", save.data.type + " · " + save.data.people + " people · " + save.data.organizations + " organizations linked") : null
+saved = save.status == "success" ? Callout("success", "Added to your Notion graph", save.data.type + " · " + save.data.people + " people · " + save.data.organizations + " organizations · " + save.data.key_phrases + " key phrases linked") : null
 openSaved = save.status == "success" ? Buttons([Button("Open in Notion", Action([@OpenUrl(save.data.url)]), "secondary")]) : null
 saveError = save.status == "error" ? Callout("error", "Couldn't save to Notion", "" + save.error) : null
 ```

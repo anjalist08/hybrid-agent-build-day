@@ -596,6 +596,9 @@
         },
         "sources": {
           "type": "number"
+        },
+        "key_phrases": {
+          "type": "number"
         }
       }
     }
